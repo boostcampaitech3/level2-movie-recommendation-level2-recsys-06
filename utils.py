@@ -26,7 +26,8 @@ def check_path(path):
         os.makedirs(path)
         print(f"{path} created")
 
-
+# 유저가 가지고 있는게 없으면 return
+#
 def neg_sample(item_set, item_size):
     item = random.randint(1, item_size - 1)
     while item in item_set:
