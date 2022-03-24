@@ -93,6 +93,7 @@ def main():
     # args.data_file = args.data_dir + args.data_name + '.txt'
     args.data_file = args.data_dir + "train_ratings.csv"
     item2attribute_file = args.data_dir + args.data_name + "_item2attributes.json"
+
     # concat all user_seq get a long sequence, from which sample neg segment for SP
     user_seq, max_item, long_sequence = get_user_seqs_long(args.data_file)
 

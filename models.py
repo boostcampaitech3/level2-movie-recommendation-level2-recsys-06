@@ -94,14 +94,14 @@ class S3RecModel(nn.Module):
         return sequence_emb
 
     def pretrain(
-        self,
-        attributes,
-        masked_item_sequence,
-        pos_items,
-        neg_items,
-        masked_segment_sequence,
-        pos_segment,
-        neg_segment,
+            self,
+            attributes,
+            masked_item_sequence,
+            pos_items,
+            neg_items,
+            masked_segment_sequence,
+            pos_segment,
+            neg_segment,
     ):
 
         # Encode masked sequence
@@ -126,7 +126,7 @@ class S3RecModel(nn.Module):
         )
         # only compute loss at non-masked position
         aap_mask = (masked_item_sequence != self.args.mask_id).float() * (
-            masked_item_sequence != 0
+                masked_item_sequence != 0
         ).float()
         aap_loss = torch.sum(aap_loss * aap_mask.flatten().unsqueeze(-1))
 
@@ -224,7 +224,7 @@ class S3RecModel(nn.Module):
         )
 
         sequence_output = item_encoded_layers[-1]
-        return sequence_output
+        return sequence_output  # B x L x H
 
     def init_weights(self, module):
         """Initialize the weights."""

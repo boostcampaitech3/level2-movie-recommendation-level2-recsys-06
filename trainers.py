@@ -3,19 +3,19 @@ import torch
 import torch.nn as nn
 import tqdm
 from torch.optim import Adam
-
+import wandb
 from utils import ndcg_k, recall_at_k
 
 
 class Trainer:
     def __init__(
-        self,
-        model,
-        train_dataloader,
-        eval_dataloader,
-        test_dataloader,
-        submission_dataloader,
-        args,
+            self,
+            model,
+            train_dataloader,
+            eval_dataloader,
+            test_dataloader,
+            submission_dataloader,
+            args,
     ):
 
         self.args = args
@@ -71,6 +71,14 @@ class Trainer:
             "RECALL@10": "{:.4f}".format(recall[1]),
             "NDCG@10": "{:.4f}".format(ndcg[1]),
         }
+        post_fix_org = {
+            "Epoch": epoch,
+            "RECALL@5": float("{:.8f}".format(recall[0])),
+            "NDCG@5": float("{:.8f}".format(ndcg[0])),
+            "RECALL@10": float("{:.8f}".format(recall[1])),
+            "NDCG@10": float("{:.8f}".format(ndcg[1])),
+        }
+        wandb.log(post_fix_org, step=epoch)
         print(post_fix)
 
         return [recall[0], ndcg[0], recall[1], ndcg[1]], str(post_fix)
@@ -83,21 +91,25 @@ class Trainer:
         self.model.load_state_dict(torch.load(file_name))
 
     def cross_entropy(self, seq_out, pos_ids, neg_ids):
-        # [batch seq_len hidden_size]
+        # [batch seq_len hidden_size] Cube 모양
         pos_emb = self.model.item_embeddings(pos_ids)
         neg_emb = self.model.item_embeddings(neg_ids)
-        # [batch*seq_len hidden_size]
+
+        # [batch*seq_len hidden_size] 2 차원 matrix 모양 펼침
         pos = pos_emb.view(-1, pos_emb.size(2))
         neg = neg_emb.view(-1, neg_emb.size(2))
         seq_emb = seq_out.view(-1, self.args.hidden_size)  # [batch*seq_len hidden_size]
+
         pos_logits = torch.sum(pos * seq_emb, -1)  # [batch*seq_len]
         neg_logits = torch.sum(neg * seq_emb, -1)
+
         istarget = (
             (pos_ids > 0).view(pos_ids.size(0) * self.model.args.max_seq_length).float()
         )  # [batch*seq_len]
+
         loss = torch.sum(
-            -torch.log(torch.sigmoid(pos_logits) + 1e-24) * istarget
-            - torch.log(1 - torch.sigmoid(neg_logits) + 1e-24) * istarget
+            - torch.log(torch.sigmoid(pos_logits) + 1e-24) * istarget  # sigmoid 양수로 크게
+            - torch.log(1 - torch.sigmoid(neg_logits) + 1e-24) * istarget  # 음수로 크게.
         ) / torch.sum(istarget)
 
         return loss
@@ -112,13 +124,13 @@ class Trainer:
 
 class PretrainTrainer(Trainer):
     def __init__(
-        self,
-        model,
-        train_dataloader,
-        eval_dataloader,
-        test_dataloader,
-        submission_dataloader,
-        args,
+            self,
+            model,
+            train_dataloader,
+            eval_dataloader,
+            test_dataloader,
+            submission_dataloader,
+            args,
     ):
         super(PretrainTrainer, self).__init__(
             model,
@@ -130,7 +142,6 @@ class PretrainTrainer(Trainer):
         )
 
     def pretrain(self, epoch, pretrain_dataloader):
-
         desc = (
             f"AAP-{self.args.aap_weight}-"
             f"MIP-{self.args.mip_weight}-"
@@ -175,10 +186,10 @@ class PretrainTrainer(Trainer):
             )
 
             joint_loss = (
-                self.args.aap_weight * aap_loss
-                + self.args.mip_weight * mip_loss
-                + self.args.map_weight * map_loss
-                + self.args.sp_weight * sp_loss
+                    self.args.aap_weight * aap_loss
+                    + self.args.mip_weight * mip_loss
+                    + self.args.map_weight * map_loss
+                    + self.args.sp_weight * sp_loss
             )
 
             self.optim.zero_grad()
@@ -205,13 +216,13 @@ class PretrainTrainer(Trainer):
 
 class FinetuneTrainer(Trainer):
     def __init__(
-        self,
-        model,
-        train_dataloader,
-        eval_dataloader,
-        test_dataloader,
-        submission_dataloader,
-        args,
+            self,
+            model,
+            train_dataloader,
+            eval_dataloader,
+            test_dataloader,
+            submission_dataloader,
+            args,
     ):
         super(FinetuneTrainer, self).__init__(
             model,
@@ -236,13 +247,18 @@ class FinetuneTrainer(Trainer):
             self.model.train()
             rec_avg_loss = 0.0
             rec_cur_loss = 0.0
-
+            wandb.watch(self.model)
             for i, batch in rec_data_iter:
                 # 0. batch_data will be sent into the device(GPU or CPU)
                 batch = tuple(t.to(self.device) for t in batch)
-                _, input_ids, target_pos, target_neg, _ = batch
+                _, input_ids, target_pos, target_neg, _ = batch  # _ -> user_ids?
+                # user_ids = [Batch]
+                # input_ids = [Batch, Seq Len]
+                # target_pos = [Batch, Seq Len]
+                # target_neg = [Batch, Seq Len]
+
                 # Binary cross_entropy
-                sequence_output = self.model.finetune(input_ids)
+                sequence_output = self.model.finetune(input_ids)  # [Batch, Seq Len, Hidden Size]
                 loss = self.cross_entropy(sequence_output, target_pos, target_neg)
                 self.optim.zero_grad()
                 loss.backward()
@@ -250,14 +266,20 @@ class FinetuneTrainer(Trainer):
 
                 rec_avg_loss += loss.item()
                 rec_cur_loss = loss.item()
-
+                # print("rec_avg_loss : ",rec_avg_loss, type(rec_avg_loss))
+                # print("rec_avg_loss : ",rec_cur_loss, type(rec_cur_loss))
             post_fix = {
                 "epoch": epoch,
                 "rec_avg_loss": "{:.4f}".format(rec_avg_loss / len(rec_data_iter)),
                 "rec_cur_loss": "{:.4f}".format(rec_cur_loss),
             }
-
+            post_fix_org = {
+                "epoch": epoch,
+                "rec_avg_loss": float("{:.8f}".format(rec_avg_loss / len(rec_data_iter))),
+                "rec_cur_loss": float("{:.8f}".format(rec_cur_loss)),
+            }
             if (epoch + 1) % self.args.log_freq == 0:
+                wandb.log(post_fix_org, step=epoch)
                 print(str(post_fix))
 
         else:
@@ -271,21 +293,23 @@ class FinetuneTrainer(Trainer):
                 user_ids, input_ids, _, target_neg, answers = batch
                 recommend_output = self.model.finetune(input_ids)
 
-                recommend_output = recommend_output[:, -1, :]
+                recommend_output = recommend_output[:, -1, :]  # 예측을 위한 마지막 영화
 
                 rating_pred = self.predict_full(recommend_output)
 
                 rating_pred = rating_pred.cpu().data.numpy().copy()
                 batch_user_index = user_ids.cpu().numpy()
-                rating_pred[self.args.train_matrix[batch_user_index].toarray() > 0] = 0
+                rating_pred[self.args.train_matrix[batch_user_index].toarray() > 0] = 0  # 봤던 영화를 제거한다.
 
-                ind = np.argpartition(rating_pred, -10)[:, -10:]
+                ind = np.argpartition(rating_pred, -10)[:,
+                      -10:]  # 10 개를 구한다 단 순위는 보장 못한다. np.argpartition -> index return
 
                 arr_ind = rating_pred[np.arange(len(rating_pred))[:, None], ind]
 
-                arr_ind_argsort = np.argsort(arr_ind)[np.arange(len(rating_pred)), ::-1]
+                arr_ind_argsort = np.argsort(arr_ind)[np.arange(len(rating_pred)),
+                                  ::-1]  # 10개 뽑은 것을 정렬한다. -> index return
 
-                batch_pred_list = ind[
+                batch_pred_list = ind[  # 예측한 10개
                     np.arange(len(rating_pred))[:, None], arr_ind_argsort
                 ]
 
