@@ -149,7 +149,7 @@ class Intermediate(nn.Module):
         self.dropout = nn.Dropout(args.hidden_dropout_prob)
 
     def forward(self, input_tensor):
-
+        # TODO relu 추가해볼까?
         hidden_states = self.dense_1(input_tensor)
         hidden_states = self.intermediate_act_fn(hidden_states)
 
