@@ -17,7 +17,7 @@ class PretrainDataset(Dataset):
 
     def split_sequence(self):
         for seq in self.user_seq:
-            input_ids = seq[-(self.max_len + 2) : -2]  # keeping same as train set
+            input_ids = seq[-(self.max_len + 2): -2]  # keeping same as train set
             for i in range(len(input_ids)):
                 self.part_sequence.append(input_ids[: i + 1])
 
@@ -54,24 +54,24 @@ class PretrainDataset(Dataset):
             sample_length = random.randint(1, len(sequence) // 2)
             start_id = random.randint(0, len(sequence) - sample_length)
             neg_start_id = random.randint(0, len(self.long_sequence) - sample_length)
-            pos_segment = sequence[start_id : start_id + sample_length]
+            pos_segment = sequence[start_id: start_id + sample_length]
             neg_segment = self.long_sequence[
-                neg_start_id : neg_start_id + sample_length
-            ]
+                          neg_start_id: neg_start_id + sample_length
+                          ]
             masked_segment_sequence = (
-                sequence[:start_id]
-                + [self.args.mask_id] * sample_length
-                + sequence[start_id + sample_length :]
+                    sequence[:start_id]
+                    + [self.args.mask_id] * sample_length
+                    + sequence[start_id + sample_length:]
             )
             pos_segment = (
-                [self.args.mask_id] * start_id
-                + pos_segment
-                + [self.args.mask_id] * (len(sequence) - (start_id + sample_length))
+                    [self.args.mask_id] * start_id
+                    + pos_segment
+                    + [self.args.mask_id] * (len(sequence) - (start_id + sample_length))
             )
             neg_segment = (
-                [self.args.mask_id] * start_id
-                + neg_segment
-                + [self.args.mask_id] * (len(sequence) - (start_id + sample_length))
+                    [self.args.mask_id] * start_id
+                    + neg_segment
+                    + [self.args.mask_id] * (len(sequence) - (start_id + sample_length))
             )
 
         assert len(masked_segment_sequence) == len(sequence)
@@ -79,6 +79,7 @@ class PretrainDataset(Dataset):
         assert len(neg_segment) == len(sequence)
 
         # padding sequence
+        # max_len 보다 길다면 짜르고 작다면 0으로 채워준다.
         pad_len = self.max_len - len(sequence)
         masked_item_sequence = [0] * pad_len + masked_item_sequence
         pos_items = [0] * pad_len + sequence
@@ -87,13 +88,13 @@ class PretrainDataset(Dataset):
         pos_segment = [0] * pad_len + pos_segment
         neg_segment = [0] * pad_len + neg_segment
 
-        masked_item_sequence = masked_item_sequence[-self.max_len :]
-        pos_items = pos_items[-self.max_len :]
-        neg_items = neg_items[-self.max_len :]
+        masked_item_sequence = masked_item_sequence[-self.max_len:]
+        pos_items = pos_items[-self.max_len:]
+        neg_items = neg_items[-self.max_len:]
 
-        masked_segment_sequence = masked_segment_sequence[-self.max_len :]
-        pos_segment = pos_segment[-self.max_len :]
-        neg_segment = neg_segment[-self.max_len :]
+        masked_segment_sequence = masked_segment_sequence[-self.max_len:]
+        pos_segment = pos_segment[-self.max_len:]
+        neg_segment = neg_segment[-self.max_len:]
 
         # Associated Attribute Prediction
         # Masked Attribute Prediction
@@ -131,8 +132,8 @@ class PretrainDataset(Dataset):
 class SASRecDataset(Dataset):
     def __init__(self, args, user_seq, test_neg_items=None, data_type="train"):
         self.args = args
-        self.user_seq = user_seq
-        self.test_neg_items = test_neg_items
+        self.user_seq = user_seq  # 유저가 어떤 영화를 봤는지
+        self.test_neg_items = test_neg_items  # 사용하지 않는다.
         self.data_type = data_type
         self.max_len = args.max_seq_length
 
@@ -143,16 +144,22 @@ class SASRecDataset(Dataset):
 
         assert self.data_type in {"train", "valid", "test", "submission"}
 
+        # Items
         # [0, 1, 2, 3, 4, 5, 6]
+
+        # For Train
         # train [0, 1, 2, 3]
         # target [1, 2, 3, 4]
 
+        # For Validation
         # valid [0, 1, 2, 3, 4]
         # answer [5]
 
+        # For Test
         # test [0, 1, 2, 3, 4, 5]
         # answer [6]
 
+        # For submission
         # submission [0, 1, 2, 3, 4, 5, 6]
         # answer None
 
@@ -170,7 +177,7 @@ class SASRecDataset(Dataset):
             input_ids = items[:-1]
             target_pos = items[1:]
             answer = [items[-1]]
-        else:
+        else:  # Submission
             input_ids = items[:]
             target_pos = items[:]  # will not be used
             answer = []
@@ -185,9 +192,9 @@ class SASRecDataset(Dataset):
         target_pos = [0] * pad_len + target_pos
         target_neg = [0] * pad_len + target_neg
 
-        input_ids = input_ids[-self.max_len :]
-        target_pos = target_pos[-self.max_len :]
-        target_neg = target_neg[-self.max_len :]
+        input_ids = input_ids[-self.max_len:]
+        target_pos = target_pos[-self.max_len:]
+        target_neg = target_neg[-self.max_len:]
 
         assert len(input_ids) == self.max_len
         assert len(target_pos) == self.max_len
