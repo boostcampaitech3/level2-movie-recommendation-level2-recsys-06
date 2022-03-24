@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from datasets import SASRecDataset
 from models import S3RecModel
 from trainers import FinetuneTrainer
+import wandb
 from utils import (
     EarlyStopping,
     check_path,
@@ -17,7 +18,27 @@ from utils import (
 )
 
 
+def WandB():
+    wandb.init(
+        # 필수
+        project="MovieLens",  # project Name
+        entity="recsys-06",  # Repository 느낌 변경 X
+        name="DEEPFM_epoch20_batch128_test4",  # -> str : ex) "모델_파라티머_파라미터_파라미터", 훈련 정보에 대해 알아보기 쉽게
+        notes="this is test",  # -> str commit의 메시지 처럼 좀 더 상세한 설명 log
+        group="DEEPFM",
+        # 추가 요소
+        # tags -> str[] baseline, production등 태그 기능.
+        # save_code -> bool 코드 저장할지 말지 default false
+        # group -> str : 프로젝트내 그룹을 지정하여 개별 실행을 더 큰 실험으로 구성, k-fold교차, 다른 여러 테스트 세트에 대한 모델 훈련 및 평가 가능.
+
+        #  more info
+        # https://docs.wandb.ai/v/ko/library/init
+    )
+
+
 def main():
+    WandB()
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--data_dir", default="../data/train/", type=str)
@@ -70,6 +91,7 @@ def main():
     parser.add_argument("--using_pretrain", action="store_true")
 
     args = parser.parse_args()
+    wandb.config.update(args)
 
     set_seed(args.seed)
     check_path(args.output_dir)
@@ -104,19 +126,19 @@ def main():
     args.checkpoint_path = os.path.join(args.output_dir, checkpoint)
 
     train_dataset = SASRecDataset(args, user_seq, data_type="train")
-    train_sampler = RandomSampler(train_dataset)
+    train_sampler = RandomSampler(train_dataset)  # Batch를 꺼낼때 섞어서 ( 유저만 섞는것, 영화를 섞는것은 아니다.)
     train_dataloader = DataLoader(
         train_dataset, sampler=train_sampler, batch_size=args.batch_size
     )
 
     eval_dataset = SASRecDataset(args, user_seq, data_type="valid")
-    eval_sampler = SequentialSampler(eval_dataset)
+    eval_sampler = SequentialSampler(eval_dataset)  # Batch 꺼낼 때 순차적으로
     eval_dataloader = DataLoader(
         eval_dataset, sampler=eval_sampler, batch_size=args.batch_size
     )
 
     test_dataset = SASRecDataset(args, user_seq, data_type="test")
-    test_sampler = SequentialSampler(test_dataset)
+    test_sampler = SequentialSampler(test_dataset)  # 순차적으로
     test_dataloader = DataLoader(
         test_dataset, sampler=test_sampler, batch_size=args.batch_size
     )
