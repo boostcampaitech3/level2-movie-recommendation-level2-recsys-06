@@ -68,6 +68,7 @@ def main():
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
 
     parser.add_argument("--using_pretrain", action="store_true")
+    parser.add_argument("--using_pretrain_model_name", type=str, default="Pretrain", help="using pretrain name name")
 
     args = parser.parse_args()
 
@@ -83,6 +84,9 @@ def main():
     user_seq, max_item, valid_rating_matrix, test_rating_matrix, _ = get_user_seqs(
         args.data_file
     )
+    print("===================================")
+    print(user_seq)
+    print("===================================")
 
     item2attribute, attribute_size = get_item2attribute_json(item2attribute_file)
 
@@ -93,7 +97,6 @@ def main():
     # save model args
     args_str = f"{args.model_name}-{args.data_name}"
     args.log_file = os.path.join(args.output_dir, args_str + ".txt")
-    print(str(args))
 
     args.item2attribute = item2attribute
     # set item score in train set to `0` in validation
@@ -122,14 +125,14 @@ def main():
     )
 
     model = S3RecModel(args=args)
+    #model = FactorizationMachine(args=args)
 
     trainer = FinetuneTrainer(
         model, train_dataloader, eval_dataloader, test_dataloader, None, args
     )
 
-    print(args.using_pretrain)
     if args.using_pretrain:
-        pretrained_path = os.path.join(args.output_dir, "Pretrain.pt")
+        pretrained_path = os.path.join(args.output_dir, {args.using_pretrain_model_name}+'.pt')
         try:
             trainer.load(pretrained_path)
             print(f"Load Checkpoint From {pretrained_path}!")
