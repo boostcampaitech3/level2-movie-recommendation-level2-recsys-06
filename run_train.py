@@ -4,6 +4,7 @@ import os
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+from importlib import import_module
 
 from datasets import SASRecDataset
 from models import S3RecModel
@@ -19,7 +20,7 @@ from utils import (
 
 def main():
     parser = argparse.ArgumentParser()
-
+    parser.add_argument("--model", default="S3RecModel", type=str, help="model type") # model 모듈
     parser.add_argument("--data_dir", default="../data/train/", type=str)
     parser.add_argument("--output_dir", default="output/", type=str)
     parser.add_argument("--data_name", default="Ml", type=str)
@@ -84,9 +85,6 @@ def main():
     user_seq, max_item, valid_rating_matrix, test_rating_matrix, _ = get_user_seqs(
         args.data_file
     )
-    print("===================================")
-    print(user_seq)
-    print("===================================")
 
     item2attribute, attribute_size = get_item2attribute_json(item2attribute_file)
 
@@ -124,7 +122,10 @@ def main():
         test_dataset, sampler=test_sampler, batch_size=args.batch_size
     )
 
-    model = S3RecModel(args=args)
+    # model 모듈
+    #model = S3RecModel(args=args)
+    model_module = getattr(import_module("model"), args.model)
+    model = model_module(args=args)
     #model = FactorizationMachine(args=args)
 
     trainer = FinetuneTrainer(

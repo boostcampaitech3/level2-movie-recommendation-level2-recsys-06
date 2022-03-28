@@ -4,6 +4,7 @@ import os
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, RandomSampler
+from importlib import import_module
 
 from datasets import PretrainDataset
 from models import S3RecModel
@@ -19,7 +20,8 @@ from utils import (
 
 def main():
     parser = argparse.ArgumentParser()
-
+    
+    parser.add_argument("--model", default="S3RecModel", type=str, help="model type") # model 모듈
     parser.add_argument("--data_dir", default="../data/train/", type=str)
     parser.add_argument("--output_dir", default="output/", type=str)
     parser.add_argument("--data_name", default="Ml", type=str)
@@ -106,7 +108,10 @@ def main():
 
     args.item2attribute = item2attribute
 
-    model = S3RecModel(args=args)
+    # model 모듈
+    # model = S3RecModel(args=args)    
+    model_module = getattr(import_module("model"), args.model)
+    model = model_module(args=args)
     trainer = PretrainTrainer(model, None, None, None, None, args)
 
     early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
