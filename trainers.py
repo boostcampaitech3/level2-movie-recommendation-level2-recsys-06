@@ -90,19 +90,25 @@ class Trainer:
     def load(self, file_name):
         self.model.load_state_dict(torch.load(file_name))
 
+    # process 5 Loss 계산 과정
     def cross_entropy(self, seq_out, pos_ids, neg_ids):
+        # process 5-1 Loss 함수에 들어오는 입력값
         # [batch seq_len hidden_size] Cube 모양
         pos_emb = self.model.item_embeddings(pos_ids)
         neg_emb = self.model.item_embeddings(neg_ids)
 
-        # [batch*seq_len hidden_size] 2 차원 matrix 모양 펼침
+        # process 5-2 계산을 쉽게 하기위해 펼치기
+        # [batch*seq_len, hidden_size] 2 차원 matrix 모양 펼침(view를 사용해 펼침)
         pos = pos_emb.view(-1, pos_emb.size(2))
         neg = neg_emb.view(-1, neg_emb.size(2))
-        seq_emb = seq_out.view(-1, self.args.hidden_size)  # [batch*seq_len hidden_size]
+        seq_emb = seq_out.view(-1, self.args.hidden_size)  # [batch*seq_len, hidden_size]
 
+        # process 5-3 예측한 영화와 실제 영화의 유사도 구하기
+        # 각 요소를 곱한 수 다 더해준다.
         pos_logits = torch.sum(pos * seq_emb, -1)  # [batch*seq_len]
         neg_logits = torch.sum(neg * seq_emb, -1)
 
+        # process 5-4 Padding을 무시하고 계산하기 위해 Mask 생성.
         istarget = (
             (pos_ids > 0).view(pos_ids.size(0) * self.model.args.max_seq_length).float()
         )  # [batch*seq_len]
@@ -248,18 +254,22 @@ class FinetuneTrainer(Trainer):
             rec_avg_loss = 0.0
             rec_cur_loss = 0.0
             wandb.watch(self.model)
+            # process 4 본격적인 훈련
             for i, batch in rec_data_iter:
                 # 0. batch_data will be sent into the device(GPU or CPU)
                 batch = tuple(t.to(self.device) for t in batch)
-                _, input_ids, target_pos, target_neg, _ = batch  # _ -> user_ids?
+                _, input_ids, target_pos, target_neg, _ = batch  # _ -> user_ids 인듯
+                # process 4-1 배치단위 훈련
                 # user_ids = [Batch]
                 # input_ids = [Batch, Seq Len]
                 # target_pos = [Batch, Seq Len]
                 # target_neg = [Batch, Seq Len]
+                # answers = [Batch, 1]
 
-                # Binary cross_entropy
-                sequence_output = self.model.finetune(input_ids)  # [Batch, Seq Len, Hidden Size]
-                loss = self.cross_entropy(sequence_output, target_pos, target_neg)
+
+                # [Batch, Seq Len, Hidden Size] Hidden Size 에 대한 그림설명 - 오피스아워 8분 50초.
+                sequence_output = self.model.finetune(input_ids)
+                loss = self.cross_entropy(sequence_output, target_pos, target_neg) # Binary cross_entropy
                 self.optim.zero_grad()
                 loss.backward()
                 self.optim.step()

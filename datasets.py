@@ -128,11 +128,11 @@ class PretrainDataset(Dataset):
         )
         return cur_tensors
 
-
+# process 3 데이터 셋의 입력과 출력
 class SASRecDataset(Dataset):
     def __init__(self, args, user_seq, test_neg_items=None, data_type="train"):
         self.args = args
-        self.user_seq = user_seq  # 유저가 어떤 영화를 봤는지
+        self.user_seq = user_seq  # 유저가 어떤 영화를 봤는지.
         self.test_neg_items = test_neg_items  # 사용하지 않는다.
         self.data_type = data_type
         self.max_len = args.max_seq_length
@@ -144,22 +144,24 @@ class SASRecDataset(Dataset):
 
         assert self.data_type in {"train", "valid", "test", "submission"}
 
+        # process 3-1 examples
         # Items
         # [0, 1, 2, 3, 4, 5, 6]
 
         # For Train
-        # train [0, 1, 2, 3]
-        # target [1, 2, 3, 4]
+        # train_ids [0, 1, 2, 3]
+        # target_pos [1, 2, 3, 4]
 
         # For Validation
-        # valid [0, 1, 2, 3, 4]
-        # answer [5]
+        # input_ids [0, 1, 2, 3, 4, 5]
+        # answer [6]
 
         # For Test
-        # test [0, 1, 2, 3, 4, 5]
+        # input_ids [0, 1, 2, 3, 4, 5]
         # answer [6]
 
         # For submission
+        # 제출은 짜르는 것이 없다.
         # submission [0, 1, 2, 3, 4, 5, 6]
         # answer None
 
@@ -184,10 +186,23 @@ class SASRecDataset(Dataset):
 
         target_neg = []
         seq_set = set(items)
+        # process 3-2 Negative Sample 구성
         for _ in input_ids:
             target_neg.append(neg_sample(seq_set, self.args.item_size))
 
         pad_len = self.max_len - len(input_ids)
+        # process 3-3 Max Sequence Length만큼 Padding(0) 또는 slicing
+        # example max_len = 10
+        # padding max_len길이로 fix하고 앞쪽 0으로 패딩
+        # input_ids = [1,2,3,4]  padding -> [0,0,0,0,0,0,1,2,3,4]
+        # target_pos = [2,3,4,5] padding -> [0,0,0,0,0,0,2,3,4,5]
+        # target_neg = [11,33,9,100] padding -> [0,0,0,0,0,0,11,33,9,100]
+
+        # slicing 앞쪽 부터 짤라내 max_len길이로 만든다.
+        # input_ids = [1,2,3,4,5,6,7,8,9,10,11] slicing -> [2,3,4,5,6,7,8,9,10,11]
+        # target_pos = 같은방법
+        # target_neg = 같은방법
+
         input_ids = [0] * pad_len + input_ids
         target_pos = [0] * pad_len + target_pos
         target_neg = [0] * pad_len + target_neg
@@ -200,9 +215,15 @@ class SASRecDataset(Dataset):
         assert len(target_pos) == self.max_len
         assert len(target_neg) == self.max_len
 
+        # process 3-4 유저별 변환되는 데이터들
+        # 한 유저에서 어떤 값들이 나오는지 알 수 있다.
+        # user_id = 1
+        # input_ids = [Seq Len]
+        # target_pos = [Seq Len]
+        # target_neg = [Seq Len]
+        # answer = [1]
         if self.test_neg_items is not None:
             test_samples = self.test_neg_items[index]
-
             cur_tensors = (
                 torch.tensor(user_id, dtype=torch.long),  # user_id for testing
                 torch.tensor(input_ids, dtype=torch.long),
