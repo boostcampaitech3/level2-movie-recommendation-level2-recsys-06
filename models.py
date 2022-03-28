@@ -3,31 +3,38 @@ import torch.nn as nn
 
 from modules import Encoder, LayerNorm
 
-
+# process 7 SAS-Rec
+# 영상보고 그림과 매칭 시켜보기
+# 오피스아워 26분 ~ 34분
 class S3RecModel(nn.Module):
     def __init__(self, args):
         super(S3RecModel, self).__init__()
-        self.item_embeddings = nn.Embedding(
+        self.item_embeddings = nn.Embedding( # process 7-1 item_embedding의 원래 위치 [item_size, hidden_size]
             args.item_size, args.hidden_size, padding_idx=0
         )
+        # process 9 Self-supervised Learning with MIM, Pretraining start
+        # process 9-1 Attribute Embedding을 위한 Layer [attribute_size, hidden_state]
         self.attribute_embeddings = nn.Embedding(
             args.attribute_size, args.hidden_size, padding_idx=0
         )
         self.position_embeddings = nn.Embedding(args.max_seq_length, args.hidden_size)
-        self.item_encoder = Encoder(args)
+        self.item_encoder = Encoder(args) # process 7-2 프랜스포머의 일부 구성요소를 사용한 Encoder
         self.LayerNorm = LayerNorm(args.hidden_size, eps=1e-12)
         self.dropout = nn.Dropout(args.hidden_dropout_prob)
         self.args = args
 
         # add unique dense layer for 4 losses respectively
+        # process 9-2 Self-Supervised Learning을 위한 Layer
         self.aap_norm = nn.Linear(args.hidden_size, args.hidden_size)
         self.mip_norm = nn.Linear(args.hidden_size, args.hidden_size)
         self.map_norm = nn.Linear(args.hidden_size, args.hidden_size)
         self.sp_norm = nn.Linear(args.hidden_size, args.hidden_size)
-        self.criterion = nn.BCELoss(reduction="none")
+        self.criterion = nn.BCELoss(reduction="none") # BCE를 줄이는 식으로 한다.
         self.apply(self.init_weights)
 
-    # AAP
+    # process 9-3 AAP (Associated Attribute Prediction) [장르]
+    # 영화 Sequence로 부터 속성을 생성하는 과정
+    # 영화의 장르를 이해시키자!
     def associated_attribute_prediction(self, sequence_output, attribute_embedding):
         """
         :param sequence_output: [B L H]
@@ -42,7 +49,9 @@ class S3RecModel(nn.Module):
         score = torch.matmul(attribute_embedding, sequence_output)
         return torch.sigmoid(score.squeeze(-1))  # [B*L tag_num]
 
-    # MIP sample neg items
+    # process 9-4 MIP(Masked Item Prediction) sample neg items
+    # 주변 정보 학습하기
+    # 제대로 예측했는지 여부를 return(Negative Smaple에서는 잘못 예측해야 좋음)
     def masked_item_prediction(self, sequence_output, target_item):
         """
         :param sequence_output: [B L H]
@@ -54,9 +63,10 @@ class S3RecModel(nn.Module):
         )  # [B*L H]
         target_item = target_item.view([-1, self.args.hidden_size])  # [B*L H]
         score = torch.mul(sequence_output, target_item)  # [B*L H]
-        return torch.sigmoid(torch.sum(score, -1))  # [B*L]
+        return torch.sigmoid(torch.sum(score, -1))  # [B*L]  # 빈 영화를 내보낸다.
 
-    # MAP
+    # process 9-5 MAP (Masked Attribute Prediction)
+    # 중간에 빈 영화가 아닌 그 영화의 장르를 예측해보자!
     def masked_attribute_prediction(self, sequence_output, attribute_embedding):
         sequence_output = self.map_norm(sequence_output)  # [B L H]
         sequence_output = sequence_output.view(
@@ -66,7 +76,8 @@ class S3RecModel(nn.Module):
         score = torch.matmul(attribute_embedding, sequence_output)
         return torch.sigmoid(score.squeeze(-1))  # [B*L tag_num]
 
-    # SP sample neg segment
+    # process 9-6 SP (Segment Prediction) sample neg segment
+    # 묶음으로 예측을 해보자! 영상(44분) 보고 알기.
     def segment_prediction(self, context, segment):
         """
         :param context: [B H]
@@ -117,10 +128,11 @@ class S3RecModel(nn.Module):
         sequence_output = encoded_layers[-1]
 
         attribute_embeddings = self.attribute_embeddings.weight
-        # AAP
+
+        # process 9-3-1 AAP에 관한 Loss 계산
         aap_score = self.associated_attribute_prediction(
             sequence_output, attribute_embeddings
-        )
+        ) # 장르에 대한 점수
         aap_loss = self.criterion(
             aap_score, attributes.view(-1, self.args.attribute_size).float()
         )
@@ -130,19 +142,19 @@ class S3RecModel(nn.Module):
         ).float()
         aap_loss = torch.sum(aap_loss * aap_mask.flatten().unsqueeze(-1))
 
-        # MIP
+        # process 9-4-1 MIP의 Loss계산
         pos_item_embs = self.item_embeddings(pos_items)
         neg_item_embs = self.item_embeddings(neg_items)
         pos_score = self.masked_item_prediction(sequence_output, pos_item_embs)
         neg_score = self.masked_item_prediction(sequence_output, neg_item_embs)
-        mip_distance = torch.sigmoid(pos_score - neg_score)
+        mip_distance = torch.sigmoid(pos_score - neg_score) # sigmoid input값이 클수록 올바른 예측이다.
         mip_loss = self.criterion(
             mip_distance, torch.ones_like(mip_distance, dtype=torch.float32)
         )
         mip_mask = (masked_item_sequence == self.args.mask_id).float()
         mip_loss = torch.sum(mip_loss * mip_mask.flatten())
 
-        # MAP
+        # process 9-5-1 MAP Loss 계산
         map_score = self.masked_attribute_prediction(
             sequence_output, attribute_embeddings
         )
@@ -152,7 +164,7 @@ class S3RecModel(nn.Module):
         map_mask = (masked_item_sequence == self.args.mask_id).float()
         map_loss = torch.sum(map_loss * map_mask.flatten().unsqueeze(-1))
 
-        # SP
+        # process 9-6-1 SP Loss 계산.
         # segment context
         segment_context = self.add_position_embedding(masked_segment_sequence)
         segment_mask = (masked_segment_sequence == 0).float() * -1e8
@@ -196,12 +208,12 @@ class S3RecModel(nn.Module):
 
     # Fine tune
     # same as SASRec
+    # process 8-2 finetune 함수 내부
+    # 코드가 길지만, 결국에는 Look-ahead mask를 구성하는 과정.
     def finetune(self, input_ids):
 
         attention_mask = (input_ids > 0).long()
-        extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(
-            2
-        )  # torch.int64
+        extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)  # torch.int64
         max_len = attention_mask.size(-1)
         attn_shape = (1, max_len, max_len)
         subsequent_mask = torch.triu(torch.ones(attn_shape), diagonal=1)  # torch.uint8

@@ -109,21 +109,26 @@ class Trainer:
         neg_logits = torch.sum(neg * seq_emb, -1)
 
         # process 5-4 Padding을 무시하고 계산하기 위해 Mask 생성.
+        # 실제 interaction만 추출.
         istarget = (
             (pos_ids > 0).view(pos_ids.size(0) * self.model.args.max_seq_length).float()
         )  # [batch*seq_len]
 
+        # process 5-5 Cross Entropy 계산하기
         loss = torch.sum(
-            - torch.log(torch.sigmoid(pos_logits) + 1e-24) * istarget  # sigmoid 양수로 크게
-            - torch.log(1 - torch.sigmoid(neg_logits) + 1e-24) * istarget  # 음수로 크게.
+            - torch.log(torch.sigmoid(pos_logits) + 1e-24) * istarget  # sigmoid -> 1에 가까울 수록 좋다 -> pos_logits은 양수로 크게
+            - torch.log(1 - torch.sigmoid(neg_logits) + 1e-24) * istarget  # 0에 가까울 수록 좋다 -> neg_logits은 음수로 크게, 1e-24 -> log(0) 방지용
         ) / torch.sum(istarget)
 
         return loss
 
+    # process 6-1 마지막 유저에 대한 임베딩과 영화에 대한 유사도를 구해 전체 영화에 대한 점수를 구한다.
+    # [Users, hidden_state] X [hidden_state, Movices]
     def predict_full(self, seq_out):
         # [item_num hidden_size]
         test_item_emb = self.model.item_embeddings.weight
         # [batch hidden_size ]
+        # TODO matmul 대신 cosine 유사도로 해볼까?
         rating_pred = torch.matmul(seq_out, test_item_emb.transpose(0, 1))
         return rating_pred
 
@@ -190,7 +195,8 @@ class PretrainTrainer(Trainer):
                 pos_segment,
                 neg_segment,
             )
-
+            # process 10 Pretraining 마무리.
+            # 모든 Loss를 합쳐서 한번에 고려, 이때 argparse로 loss 각각의 가중치를 조절 가능
             joint_loss = (
                     self.args.aap_weight * aap_loss
                     + self.args.mip_weight * mip_loss
@@ -266,10 +272,13 @@ class FinetuneTrainer(Trainer):
                 # target_neg = [Batch, Seq Len]
                 # answers = [Batch, 1]
 
-
                 # [Batch, Seq Len, Hidden Size] Hidden Size 에 대한 그림설명 - 오피스아워 8분 50초.
                 sequence_output = self.model.finetune(input_ids)
+
+                # process 5
                 loss = self.cross_entropy(sequence_output, target_pos, target_neg) # Binary cross_entropy
+
+
                 self.optim.zero_grad()
                 loss.backward()
                 self.optim.step()
@@ -297,6 +306,7 @@ class FinetuneTrainer(Trainer):
 
             pred_list = None
             answer_list = None
+            # process 6 예측 과정
             for i, batch in rec_data_iter:
 
                 batch = tuple(t.to(self.device) for t in batch)
@@ -305,7 +315,7 @@ class FinetuneTrainer(Trainer):
 
                 recommend_output = recommend_output[:, -1, :]  # 예측을 위한 마지막 영화
 
-                rating_pred = self.predict_full(recommend_output)
+                rating_pred = self.predict_full(recommend_output) # 예측 6
 
                 rating_pred = rating_pred.cpu().data.numpy().copy()
                 batch_user_index = user_ids.cpu().numpy()
