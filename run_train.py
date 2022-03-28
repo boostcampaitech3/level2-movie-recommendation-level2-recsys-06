@@ -184,6 +184,5 @@ def main():
     scores, result_info = trainer.test(0)
     print(result_info)
 
-
 if __name__ == "__main__":
     main()

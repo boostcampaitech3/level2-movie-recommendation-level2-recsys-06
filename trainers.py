@@ -255,6 +255,7 @@ class FinetuneTrainer(Trainer):
             total=len(dataloader),
             bar_format="{l_bar}{r_bar}",
         )
+
         if mode == "train":
             self.model.train()
             rec_avg_loss = 0.0
@@ -303,7 +304,6 @@ class FinetuneTrainer(Trainer):
 
         else:
             self.model.eval()
-
             pred_list = None
             answer_list = None
             # process 6 예측 과정
