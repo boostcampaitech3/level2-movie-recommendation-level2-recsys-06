@@ -134,7 +134,8 @@ class SelfAttention(nn.Module):
 
         return hidden_states
 
-
+# # process 8-3 Intermediate layer
+# Encoder 블럭의 마지막 구성요소인 Point-Wise FFN
 class Intermediate(nn.Module):
     def __init__(self, args):
         super(Intermediate, self).__init__()
@@ -163,7 +164,7 @@ class Intermediate(nn.Module):
 class Layer(nn.Module):
     def __init__(self, args):
         super(Layer, self).__init__()
-        self.attention = SelfAttention(args)
+        self.attention = SelfAttention(args) # process 8-1 Selfattention layer
         self.intermediate = Intermediate(args)
 
     def forward(self, hidden_states, attention_mask):
@@ -171,12 +172,12 @@ class Layer(nn.Module):
         intermediate_output = self.intermediate(attention_output)
         return intermediate_output
 
-
+# process 8 Encoder Block 구성 요소
 class Encoder(nn.Module):
     def __init__(self, args):
         super(Encoder, self).__init__()
         layer = Layer(args)
-        self.layer = nn.ModuleList(
+        self.layer = nn.ModuleList( # 인코더 블락은 여러개로 쌓일 수 있다.
             [copy.deepcopy(layer) for _ in range(args.num_hidden_layers)]
         )
 

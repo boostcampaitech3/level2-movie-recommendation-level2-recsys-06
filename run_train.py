@@ -102,6 +102,8 @@ def main():
     args.data_file = args.data_dir + "train_ratings.csv"
     item2attribute_file = args.data_dir + args.data_name + "_item2attributes.json"
 
+    # process 1 데이터 파일 로드
+    # 각 유저별 마지막 일부(1개) 아이템을 빼서 테스트 데이터를 구성한다.
     user_seq, max_item, valid_rating_matrix, test_rating_matrix, _ = get_user_seqs(
         args.data_file
     )
@@ -125,18 +127,21 @@ def main():
     checkpoint = args_str + ".pt"
     args.checkpoint_path = os.path.join(args.output_dir, checkpoint)
 
+    # process 2 데이터 셋 구성
+    # 훈련
     train_dataset = SASRecDataset(args, user_seq, data_type="train")
     train_sampler = RandomSampler(train_dataset)  # Batch를 꺼낼때 섞어서 ( 유저만 섞는것, 영화를 섞는것은 아니다.)
     train_dataloader = DataLoader(
         train_dataset, sampler=train_sampler, batch_size=args.batch_size
     )
-
+    # 평가
+    # eval 과 test는 순차적으로 결과를 내야 되기 때문에 유저들을 순서대로(SequentialSampler) 뽑음
     eval_dataset = SASRecDataset(args, user_seq, data_type="valid")
     eval_sampler = SequentialSampler(eval_dataset)  # Batch 꺼낼 때 순차적으로
     eval_dataloader = DataLoader(
         eval_dataset, sampler=eval_sampler, batch_size=args.batch_size
     )
-
+    # 테스트
     test_dataset = SASRecDataset(args, user_seq, data_type="test")
     test_sampler = SequentialSampler(test_dataset)  # 순차적으로
     test_dataloader = DataLoader(

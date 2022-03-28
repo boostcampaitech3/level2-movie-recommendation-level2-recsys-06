@@ -16,6 +16,9 @@ from utils import (
     set_seed,
 )
 
+# process 11 Pretraining의 목적
+# 최정족으로 최적화 하려는 것은 Item Embedding!
+# 다음 영화 이해하기, 영화 장르 이해하기, 영화 순서 이해하기, 영화 순서와 장르 이해하기, 영화 시리즈로 이해하기.
 
 def main():
     parser = argparse.ArgumentParser()
