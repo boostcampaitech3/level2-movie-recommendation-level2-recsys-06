@@ -14,7 +14,7 @@ from scipy import sparse
 
 
 from datasets import SASRecDataset
-from models import S3RecModel, MultiVAE, loss_function_vae
+from models import MultiVAE, loss_function_vae
 from trainers import FinetuneTrainer
 import bottleneck as bn
 from utils import (
@@ -86,6 +86,7 @@ class DataLoader():
         data_te = sparse.csr_matrix((np.ones_like(rows_te),
                                     (rows_te, cols_te)), dtype='float64', shape=(end_idx - start_idx + 1, self.n_items))
         return data_tr, data_te
+
 def NDCG_binary_at_k_batch(X_pred, heldout_batch, k=100):
     '''
     Normalized Discounted Cumulative Gain@k for binary relevance
@@ -119,6 +120,7 @@ def Recall_at_k_batch(X_pred, heldout_batch, k=100):
     tmp = (np.logical_and(X_true_binary, X_pred_binary).sum(axis=1)).astype(
         np.float32)
     recall = tmp / np.minimum(k, X_true_binary.sum(axis=1))
+    
     return recall
 
 def sparse2torch_sparse(data):
@@ -188,7 +190,7 @@ def train(model, criterion, optimizer, is_VAE = False):
             start_time = time.time()
             train_loss = 0.0
 
-def evaluate(model, criterion, data_tr, data_te, is_VAE=False):
+def evaluate(model, criterion, data_tr, data_te, is_VAE=False, test=False):
     # Turn on evaluation mode
     model.eval()
     total_loss = 0.0
@@ -196,6 +198,7 @@ def evaluate(model, criterion, data_tr, data_te, is_VAE=False):
     e_idxlist = list(range(data_tr.shape[0]))
     e_N = data_tr.shape[0]
     n100_list = []
+    r10_list = []
     r20_list = []
     r50_list = []
     
@@ -224,8 +227,6 @@ def evaluate(model, criterion, data_tr, data_te, is_VAE=False):
               loss = criterion(recon_batch, data_tensor)
 
 
-
-
             total_loss += loss.item()
 
             # Exclude examples from training set
@@ -233,31 +234,45 @@ def evaluate(model, criterion, data_tr, data_te, is_VAE=False):
             recon_batch[data.nonzero()] = -np.inf
 
             n100 = NDCG_binary_at_k_batch(recon_batch, heldout_data, 100)
+            r10 = Recall_at_k_batch(recon_batch, heldout_data, 10)
             r20 = Recall_at_k_batch(recon_batch, heldout_data, 20)
             r50 = Recall_at_k_batch(recon_batch, heldout_data, 50)
 
+            r10_list.append(r10)
             n100_list.append(n100)
             r20_list.append(r20)
             r50_list.append(r50)
- 
+            
+            if test == True:
+                batch_users = recon_batch.shape[0]
+                idx = bn.argpartition(-recon_batch, 10, axis=1)
+                arr_ind = recon_batch[np.arange(len(recon_batch))[:, None], idx]
+                arr_ind_argsort = np.argsort(arr_ind)[np.arange(len(recon_batch)), ::-1]
+
+                batch_pred_list = idx[
+                                np.arange(len(recon_batch))[:, None], arr_ind_argsort
+                            ]
+
     total_loss /= len(range(0, e_N, args.batch_size))
     n100_list = np.concatenate(n100_list)
     r20_list = np.concatenate(r20_list)
     r50_list = np.concatenate(r50_list)
+    r10_list = np.concatenate(r10_list)
 
-    return total_loss, np.mean(n100_list), np.mean(r20_list), np.mean(r50_list)
+    
+    
+    #X_pred_binary = np.zeros_like(recon_batch, dtype=bool)
+    #X_pred_binary[np.arange(batch_users)[:, np.newaxis], idx[:, :k]] = True
+
+
+
+
+    return total_loss, np.mean(n100_list), np.mean(r10_list), np.mean(r20_list), np.mean(r50_list)
 
 def main():
     
 
-    set_seed(args.seed)
-    check_path(args.output_dir)
-
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
-    args.cuda_condition = torch.cuda.is_available() and not args.no_cuda
-
-    args.data_file = args.data_dir + "train_ratings.csv"
-    item2attribute_file = args.data_dir + args.data_name + "_item2attributes.json"
+    
 
     user_seq, max_item, valid_rating_matrix, test_rating_matrix, _ = get_user_seqs(
         args.data_file
@@ -269,17 +284,8 @@ def main():
     args.mask_id = max_item + 1
     args.attribute_size = attribute_size + 1
 
-    # save model args
-    args_str = f"{args.model_name}-{args.data_name}"
-    args.log_file = os.path.join(args.output_dir, args_str + ".txt")
-
-    args.item2attribute = item2attribute
-    # set item score in train set to `0` in validation
-    args.train_matrix = valid_rating_matrix
-
-    # save model
-    checkpoint = args_str + ".pt"
-    args.checkpoint_path = os.path.join(args.output_dir, checkpoint)
+    
+    
 
     
 
@@ -302,10 +308,7 @@ def main():
     # )
 
 
-    # trainer = FinetuneTrainer(
-    #     model, train_dataloader, eval_dataloader, test_dataloader, None, args
-    # )
-
+    
     if args.using_pretrain:
         pretrained_path = os.path.join(args.output_dir, {args.using_pretrain_model_name}+'.pt')
         try:
@@ -325,66 +328,58 @@ def main():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # parser.add_argument("--model", default="S3RecModel", type=str, help="model type") # model 모듈
-    parser.add_argument("--data_dir", default="../data/train/", type=str)
-    parser.add_argument("--output_dir", default="output/", type=str)
+    parser.add_argument("--model_name", default="MultiVAE", type=str)
+    parser.add_argument("--data_dir", default="/opt/ml/input/data/train/", type=str)
     parser.add_argument("--data_name", default="Ml", type=str)
-
-    # model args
-    parser.add_argument("--model_name", default="Finetune_full", type=str)
-    parser.add_argument(
-        "--hidden_size", type=int, default=64, help="hidden size of transformer model"
-    )
-    parser.add_argument(
-        "--num_hidden_layers", type=int, default=2, help="number of layers"
-    )
-    parser.add_argument("--num_attention_heads", default=2, type=int)
-    parser.add_argument("--hidden_act", default="gelu", type=str)  # gelu relu
-    parser.add_argument(
-        "--attention_probs_dropout_prob",
-        type=float,
-        default=0.5,
-        help="attention dropout p",
-    )
-    parser.add_argument(
-        "--hidden_dropout_prob", type=float, default=0.5, help="hidden dropout p"
-    )
-    parser.add_argument("--initializer_range", type=float, default=0.02)
-    parser.add_argument("--max_seq_length", default=50, type=int)
-
-    # train args
-    parser.add_argument("--lr", type=float, default=0.001, help="learning rate of adam")
-    parser.add_argument(
-        "--batch_size", type=int, default=256, help="number of batch_size"
-    )
-    parser.add_argument("--epochs", type=int, default=200, help="number of epochs")
-    parser.add_argument("--no_cuda", action="store_true")
-    parser.add_argument("--log_freq", type=int, default=1, help="per epoch print res")
-    parser.add_argument("--seed", default=42, type=int)
-
-    parser.add_argument(
-        "--weight_decay", type=float, default=0.0, help="weight_decay of adam"
-    )
-    parser.add_argument(
-        "--adam_beta1", type=float, default=0.9, help="adam first beta value"
-    )
-    parser.add_argument(
-        "--adam_beta2", type=float, default=0.999, help="adam second beta value"
-    )
+    parser.add_argument("--output_dir", default="output/", type=str)
+    parser.add_argument('--lr', type=float, default=1e-4,
+                    help='initial learning rate')
+    parser.add_argument('--wd', type=float, default=0.00,
+                        help='weight decay coefficient')
+    parser.add_argument('--batch_size', type=int, default=500,
+                        help='batch size')
+    parser.add_argument('--epochs', type=int, default=20,
+                        help='upper epoch limit')
+    parser.add_argument('--total_anneal_steps', type=int, default=200000,
+                        help='the total number of gradient updates for annealing')
+    parser.add_argument('--anneal_cap', type=float, default=0.2,
+                        help='largest annealing parameter')
+    parser.add_argument('--seed', type=int, default=1111,
+                        help='random seed')
+    parser.add_argument('--cuda', action='store_true',
+                        help='use CUDA')
+    parser.add_argument('--log_interval', type=int, default=100, metavar='N',
+                        help='report interval')
+    parser.add_argument('--save', type=str, default='model.pt',
+                        help='path to save the final model')
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
+    args = parser.parse_args([])
 
-    parser.add_argument("--using_pretrain", action="store_true")
-    parser.add_argument("--using_pretrain_model_name", type=str, default="Pretrain", help="using pretrain name name")
+    # Set the random seed manually for reproductibility.
+    torch.manual_seed(args.seed)
 
-    args = parser.parse_args()
+    #만약 GPU가 사용가능한 환경이라면 GPU를 사용
+    if torch.cuda.is_available():
+        args.cuda = True
 
     device = torch.device("cuda" if args.cuda else "cpu")
+    print(device)
+
+    set_seed(args.seed)
+    check_path(args.output_dir)
+
+    # os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
+    # args.cuda_condition = torch.cuda.is_available() and not args.no_cuda
+
+    args.data_file = args.data_dir + "train_ratings.csv"
+    item2attribute_file = args.data_dir + args.data_name + "_item2attributes.json"
 
    
     ###############################################################################
     # Load data
     ###############################################################################
 
-    loader = DataLoader(args.data)
+    loader = DataLoader(args.data_dir)
 
     n_items = loader.load_n_items()
     train_data = loader.load_data('train')
@@ -408,42 +403,60 @@ if __name__ == "__main__":
     # Training code
     ###############################################################################
 
-    best_n100 = -np.inf
+    #best_n100 = -np.inf
+    best_r20 = -np.inf
     update_count = 0
 
-    best_n100 = -np.inf
-    update_count = 0
+
+    # trainer = FinetuneTrainer(
+    #     model, train_dataloader, eval_dataloader, test_dataloader, None, args
+    # )
+
+    # save model args
+    args_str = f"{args.model_name}-{args.data_name}"
+    args.log_file = os.path.join(args.output_dir, args_str + ".txt")
+
+    # args.item2attribute = item2attribute
+    # # set item score in train set to `0` in validation
+    # args.train_matrix = valid_rating_matrix
+
+
+    # save model
+    checkpoint = args_str + ".pt"
+    args.checkpoint_path = os.path.join(args.output_dir, checkpoint)
 
     early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
+    
 
     for epoch in range(1, args.epochs + 1):
         epoch_start_time = time.time()
         train(model, criterion, optimizer, is_VAE=True)
-        val_loss, n100, r20, r50 = evaluate(model, criterion, vad_data_tr, vad_data_te, is_VAE=True)
-        print('-' * 89)
+        val_loss, n100, r10, r20, r50 = evaluate(model, criterion, vad_data_tr, vad_data_te, is_VAE=True)
+        print('-' * 100)
         print('| end of epoch {:3d} | time: {:4.2f}s | valid loss {:4.2f} | '
-                'n100 {:5.3f} | r20 {:5.3f} | r50 {:5.3f}'.format(
+                'n100 {:5.3f} | r10 {:5.3f} | r20 {:5.3f} | r50 {:5.3f}'.format(
                     epoch, time.time() - epoch_start_time, val_loss,
-                    n100, r20, r50))
-        print('-' * 89)
+                    n100, r10, r20, r50))
+        print('-' * 100)
 
         n_iter = epoch * len(range(0, N, args.batch_size))
 
-        
-    
+
         # Save the model if the n100 is the best we've seen so far.
-        if n100 > best_n100:
-            with open(args.save, 'wb') as f:
+        if r20 > best_r20:
+            with open(args.checkpoint_path, 'wb') as f:
                 torch.save(model, f)
-            best_n100 = n100
+            best_r20 = n100
 
     # Load the best saved model.
-    with open(args.save, 'rb') as f:
+    with open(args.checkpoint_path, 'rb') as f:
         model = torch.load(f)
 
+    
     # Run on test data.
-    test_loss, n100, r20, r50 = evaluate(model, criterion, test_data_tr, test_data_te, is_VAE=True)
-    print('=' * 89)
-    print('| End of training | test loss {:4.2f} | n100 {:4.2f} | r20 {:4.2f} | '
-            'r50 {:4.2f}'.format(test_loss, n100, r20, r50))
-    print('=' * 89)
+    test_loss, n100, r10, r20, r50 = evaluate(model, criterion, test_data_tr, test_data_te, is_VAE=True, test=True)
+    print('=' * 100)
+    print('| End of training | test loss {:4.2f} | n100 {:4.2f} | r10 {:4.2f} | r20 {:4.2f} | '
+            'r50 {:4.2f}'.format(test_loss, n100, r10, r20, r50))
+    print('=' * 100)
+    
