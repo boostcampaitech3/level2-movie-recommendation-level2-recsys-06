@@ -219,10 +219,6 @@ def evaluate(model, criterion, data_tr, data_te, is_VAE=False):
 
     rating = pd.read_csv(os.path.join(args.data_dir)+'train_ratings.csv')
 
-    itemnumber=rating['item'].unique()
-
-    submission_user = list()
-    submission_item = list()
     
     with torch.no_grad():
         for start_idx in range(0, e_N, args.batch_size):
@@ -264,42 +260,11 @@ def evaluate(model, criterion, data_tr, data_te, is_VAE=False):
             r20_list.append(r20)
             r50_list.append(r50)
 
-            # FIXME
-            # test set에 대한 결과를 뽑는 방법을 모르겠음
-            # if test == True:
-            #     batch_users = recon_batch.shape[0] # batch 마다 user의 수를 가져옴
-            #     idx = bn.argpartition(-recon_batch, 10, axis=1)[:, :10] # 가장 큰 숫자의 인덱스 10개를 가져옴
-            #     submission_item.append(itemnumber[idx])
-                
-                # user : unique => 유저 아이디만 가져옴
-                # 1. user.unique().repeat(10).reshape(-1. 1) 
-                # 2. df['item'].unique()[idx.reshape(-1,1)] 
-                # 1과 2 concat
-                # 아니면 한꺼번에 append => numpy => reshape
-                # 처음에는 유저 아이디 0번부터 299까지, 300
-
-                # arr_ind = recon_batch[np.arange(len(recon_batch))[:, None], idx]
-                # arr_ind_argsort = np.argsort(arr_ind)[np.arange(len(recon_batch)), ::-1]
-
-                # batch_pred_list = idx[
-                #                 np.arange(len(recon_batch))[:, None], arr_ind_argsort
-                #             ]
-
     total_loss /= len(range(0, e_N, args.batch_size))
     n100_list = np.concatenate(n100_list)
     r20_list = np.concatenate(r20_list)
     r50_list = np.concatenate(r50_list)
     r10_list = np.concatenate(r10_list)
-
-    # if test == True:
-    #     submission_item = np.array(submission_item).reshape(-1,1)
-    #     submission_user = train_csv['user'].unique().repeat(10)
-    #     submission_user = np.array(submission_user).reshape(-1,1)
-
-    #     result = np.concatenate(submission_user,submission_item,axis=1)
-    #     result = pd.DataFrame(result, columns=['user','item'])
-    #     result.to_csv('result.csv', index=False)
-
 
     return total_loss, np.mean(n100_list), np.mean(r10_list), np.mean(r20_list), np.mean(r50_list)
 
@@ -353,10 +318,6 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
             recon_batch = recon_batch.cpu().numpy()
             recon_batch[data.nonzero()] = -np.inf
 
-            # FIXME
-            # test set에 대한 결과를 뽑는 방법을 모르겠음
-            # idxes = recon_batch
-            #idxes = bn.argpartition(-recon_batch, 10, axis=1)[:, :10] # 가장 큰 숫자의 인덱스 10개를 가져옴
             for i in range(len(recon_batch)):
                 idxes = bn.argpartition(-recon_batch[i], 10)[:10]
                 tmp = list()
@@ -364,23 +325,6 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
                 for j in range(len(idxes)):
                     tmp.append(list(show2id.keys())[idxes[j]]) # id2show
                 submission_item.append(tmp)
-
-            
-                
-                # user : unique => 유저 아이디만 가져옴
-                # 1. user.unique().repeat(10).reshape(-1. 1) 
-                # 2. df['item'].unique()[idx.reshape(-1,1)] 
-                # 1과 2 concat
-                # 아니면 한꺼번에 append => numpy => reshape
-                # 처음에는 유저 아이디 0번부터 299까지, 300
-
-                # arr_ind = recon_batch[np.arange(len(recon_batch))[:, None], idx]
-                # arr_ind_argsort = np.argsort(arr_ind)[np.arange(len(recon_batch)), ::-1]
-
-                # batch_pred_list = idx[
-                #                 np.arange(len(recon_batch))[:, None], arr_ind_argsort
-                #             ]
-
 
     submission_item = np.array(submission_item).reshape(-1, 1)
     submission_user = raw_data['user'].unique().repeat(10)
