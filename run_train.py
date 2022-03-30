@@ -45,8 +45,10 @@ class DataLoader():
             return self._load_tr_te_data(datatype)
         elif datatype == 'test':
             return self._load_tr_te_data(datatype)
+        elif datatype == "submission":
+            return self._load_submission_data(datatype)
         else:
-            raise ValueError("datatype should be in [train, validation, test]")
+            raise ValueError("datatype should be in [train, validation, test, submission]")
         
     def load_n_items(self):
         unique_sid = list()
@@ -86,6 +88,19 @@ class DataLoader():
         data_te = sparse.csr_matrix((np.ones_like(rows_te),
                                     (rows_te, cols_te)), dtype='float64', shape=(end_idx - start_idx + 1, self.n_items))
         return data_tr, data_te
+
+    def _load_submission_data(self, datatype="submission"):
+        path = os.path.join(self.pro_dir, '{}_data2.csv'.format(datatype))
+        
+        tp = pd.read_csv(path)
+        n_users = tp['uid'].max() + 1
+
+        rows, cols = tp['uid'], tp['sid']
+        data = sparse.csr_matrix((np.ones_like(rows),
+                                 (rows, cols)), dtype='float64',
+                                 shape=(n_users, self.n_items))
+        return data
+
 
 def NDCG_binary_at_k_batch(X_pred, heldout_batch, k=100):
     '''
@@ -190,8 +205,9 @@ def train(model, criterion, optimizer, is_VAE = False):
             start_time = time.time()
             train_loss = 0.0
 
-def evaluate(model, criterion, data_tr, data_te, is_VAE=False, test=False):
+def evaluate(model, criterion, data_tr, data_te, is_VAE=False):
     # Turn on evaluation mode
+
     model.eval()
     total_loss = 0.0
     global update_count
@@ -201,12 +217,117 @@ def evaluate(model, criterion, data_tr, data_te, is_VAE=False, test=False):
     r10_list = []
     r20_list = []
     r50_list = []
+
+    rating = pd.read_csv(os.path.join(args.data_dir)+'train_ratings.csv')
+
+    itemnumber=rating['item'].unique()
+
+    submission_user = list()
+    submission_item = list()
     
     with torch.no_grad():
         for start_idx in range(0, e_N, args.batch_size):
             end_idx = min(start_idx + args.batch_size, N)
             data = data_tr[e_idxlist[start_idx:end_idx]]
             heldout_data = data_te[e_idxlist[start_idx:end_idx]]
+
+            device = torch.device("cuda" if args.cuda else "cpu")
+            data_tensor = naive_sparse2tensor(data).to(device)
+            if is_VAE :
+              
+              if args.total_anneal_steps > 0:
+                  anneal = min(args.anneal_cap, 
+                                1. * update_count / args.total_anneal_steps)
+              else:
+                  anneal = args.anneal_cap
+
+              recon_batch, mu, logvar = model(data_tensor)
+              loss = criterion(recon_batch, data_tensor, mu, logvar, anneal)
+
+            else :
+              recon_batch = model(data_tensor)
+              loss = criterion(recon_batch, data_tensor)
+
+
+            total_loss += loss.item()
+
+            # Exclude examples from training set
+            recon_batch = recon_batch.cpu().numpy()
+            recon_batch[data.nonzero()] = -np.inf
+
+            n100 = NDCG_binary_at_k_batch(recon_batch, heldout_data, 100)
+            r10 = Recall_at_k_batch(recon_batch, heldout_data, 10)
+            r20 = Recall_at_k_batch(recon_batch, heldout_data, 20)
+            r50 = Recall_at_k_batch(recon_batch, heldout_data, 50)
+
+            r10_list.append(r10)
+            n100_list.append(n100)
+            r20_list.append(r20)
+            r50_list.append(r50)
+
+            # FIXME
+            # test set에 대한 결과를 뽑는 방법을 모르겠음
+            # if test == True:
+            #     batch_users = recon_batch.shape[0] # batch 마다 user의 수를 가져옴
+            #     idx = bn.argpartition(-recon_batch, 10, axis=1)[:, :10] # 가장 큰 숫자의 인덱스 10개를 가져옴
+            #     submission_item.append(itemnumber[idx])
+                
+                # user : unique => 유저 아이디만 가져옴
+                # 1. user.unique().repeat(10).reshape(-1. 1) 
+                # 2. df['item'].unique()[idx.reshape(-1,1)] 
+                # 1과 2 concat
+                # 아니면 한꺼번에 append => numpy => reshape
+                # 처음에는 유저 아이디 0번부터 299까지, 300
+
+                # arr_ind = recon_batch[np.arange(len(recon_batch))[:, None], idx]
+                # arr_ind_argsort = np.argsort(arr_ind)[np.arange(len(recon_batch)), ::-1]
+
+                # batch_pred_list = idx[
+                #                 np.arange(len(recon_batch))[:, None], arr_ind_argsort
+                #             ]
+
+    total_loss /= len(range(0, e_N, args.batch_size))
+    n100_list = np.concatenate(n100_list)
+    r20_list = np.concatenate(r20_list)
+    r50_list = np.concatenate(r50_list)
+    r10_list = np.concatenate(r10_list)
+
+    # if test == True:
+    #     submission_item = np.array(submission_item).reshape(-1,1)
+    #     submission_user = train_csv['user'].unique().repeat(10)
+    #     submission_user = np.array(submission_user).reshape(-1,1)
+
+    #     result = np.concatenate(submission_user,submission_item,axis=1)
+    #     result = pd.DataFrame(result, columns=['user','item'])
+    #     result.to_csv('result.csv', index=False)
+
+
+    return total_loss, np.mean(n100_list), np.mean(r10_list), np.mean(r20_list), np.mean(r50_list)
+
+def evaluate_submission(model, criterion, submission_data, is_VAE=False):
+    # Turn on evaluation mode
+
+    model.eval()
+    total_loss = 0.0
+    global update_count
+    e_idxlist = list(range(submission_data.shape[0]))
+    e_N = submission_data.shape[0]
+
+    raw_data = pd.read_csv(os.path.join(args.data_dir)+'train_ratings.csv')
+
+    unique_sid = pd.unique(raw_data['item'])
+    unique_uid = pd.unique(raw_data['user'])
+    show2id = dict((sid, i) for (i, sid) in enumerate(unique_sid))
+    profile2id = dict((pid, i) for (i, pid) in enumerate(unique_uid))
+
+    submission_user = list()
+    submission_item = list()
+    count = 0
+    with torch.no_grad():
+        for start_idx in range(0, e_N, args.batch_size):
+            end_idx = min(start_idx + args.batch_size, s_N)
+            data = submission_data[e_idxlist[start_idx:end_idx]]
+            # heldout_data = data_te[e_idxlist[start_idx:end_idx]]
 
             device = torch.device("cuda" if args.cuda else "cpu")
             data_tensor = naive_sparse2tensor(data).to(device)
@@ -233,47 +354,47 @@ def evaluate(model, criterion, data_tr, data_te, is_VAE=False, test=False):
             recon_batch = recon_batch.cpu().numpy()
             recon_batch[data.nonzero()] = -np.inf
 
-            n100 = NDCG_binary_at_k_batch(recon_batch, heldout_data, 100)
-            r10 = Recall_at_k_batch(recon_batch, heldout_data, 10)
-            r20 = Recall_at_k_batch(recon_batch, heldout_data, 20)
-            r50 = Recall_at_k_batch(recon_batch, heldout_data, 50)
+            # FIXME
+            # test set에 대한 결과를 뽑는 방법을 모르겠음
+            # idxes = recon_batch
+            #idxes = bn.argpartition(-recon_batch, 10, axis=1)[:, :10] # 가장 큰 숫자의 인덱스 10개를 가져옴
+            for i in range(len(recon_batch)):
+                idxes = bn.argpartition(-recon_batch[i], 10)[:10]
+                tmp = list()
+                count += 1
+                for j in range(len(idxes)):
+                    tmp.append(list(show2id.keys())[idxes[j]]) # id2show
+                submission_item.append(tmp)
 
-            r10_list.append(r10)
-            n100_list.append(n100)
-            r20_list.append(r20)
-            r50_list.append(r50)
             
-            if test == True:
-                batch_users = recon_batch.shape[0]
-                idx = bn.argpartition(-recon_batch, 10, axis=1)
-                arr_ind = recon_batch[np.arange(len(recon_batch))[:, None], idx]
-                arr_ind_argsort = np.argsort(arr_ind)[np.arange(len(recon_batch)), ::-1]
+                
+                # user : unique => 유저 아이디만 가져옴
+                # 1. user.unique().repeat(10).reshape(-1. 1) 
+                # 2. df['item'].unique()[idx.reshape(-1,1)] 
+                # 1과 2 concat
+                # 아니면 한꺼번에 append => numpy => reshape
+                # 처음에는 유저 아이디 0번부터 299까지, 300
 
-                batch_pred_list = idx[
-                                np.arange(len(recon_batch))[:, None], arr_ind_argsort
-                            ]
+                # arr_ind = recon_batch[np.arange(len(recon_batch))[:, None], idx]
+                # arr_ind_argsort = np.argsort(arr_ind)[np.arange(len(recon_batch)), ::-1]
 
-    total_loss /= len(range(0, e_N, args.batch_size))
-    n100_list = np.concatenate(n100_list)
-    r20_list = np.concatenate(r20_list)
-    r50_list = np.concatenate(r50_list)
-    r10_list = np.concatenate(r10_list)
-
-    
-    
-    #X_pred_binary = np.zeros_like(recon_batch, dtype=bool)
-    #X_pred_binary[np.arange(batch_users)[:, np.newaxis], idx[:, :k]] = True
+                # batch_pred_list = idx[
+                #                 np.arange(len(recon_batch))[:, None], arr_ind_argsort
+                #             ]
 
 
+    submission_item = np.array(submission_item).reshape(-1, 1)
+    submission_user = raw_data['user'].unique().repeat(10)
+    submission_user = np.array(submission_user).reshape(-1, 1)
 
+    result = np.hstack((submission_user,submission_item))
 
-    return total_loss, np.mean(n100_list), np.mean(r10_list), np.mean(r20_list), np.mean(r50_list)
+    result = pd.DataFrame(result, columns=['user','item'])
+    result.to_csv('result.csv', index=False)
+
+    print("export submission done!")
 
 def main():
-    
-
-    
-
     user_seq, max_item, valid_rating_matrix, test_rating_matrix, _ = get_user_seqs(
         args.data_file
     )
@@ -353,7 +474,8 @@ if __name__ == "__main__":
     parser.add_argument('--save', type=str, default='model.pt',
                         help='path to save the final model')
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
-    args = parser.parse_args([])
+    
+    args = parser.parse_args()
 
     # Set the random seed manually for reproductibility.
     torch.manual_seed(args.seed)
@@ -385,8 +507,10 @@ if __name__ == "__main__":
     train_data = loader.load_data('train')
     vad_data_tr, vad_data_te = loader.load_data('validation')
     test_data_tr, test_data_te = loader.load_data('test')
+    submission_data = loader.load_data('submission')
 
     N = train_data.shape[0]
+    s_N = submission_data.shape[0]
     idxlist = list(range(N))
 
     ###############################################################################
@@ -450,13 +574,15 @@ if __name__ == "__main__":
 
     # Load the best saved model.
     with open(args.checkpoint_path, 'rb') as f:
-        model = torch.load(f)
+        model = torch.load(f)       
 
     
     # Run on test data.
-    test_loss, n100, r10, r20, r50 = evaluate(model, criterion, test_data_tr, test_data_te, is_VAE=True, test=True)
+    test_loss, n100, r10, r20, r50 = evaluate(model, criterion, test_data_tr, test_data_te, is_VAE=True)
     print('=' * 100)
     print('| End of training | test loss {:4.2f} | n100 {:4.2f} | r10 {:4.2f} | r20 {:4.2f} | '
             'r50 {:4.2f}'.format(test_loss, n100, r10, r20, r50))
     print('=' * 100)
-    
+
+
+    evaluate_submission(model, criterion=criterion, submission_data=loader.load_data("submission"), is_VAE=True)
