@@ -65,6 +65,7 @@ def main():
         "--hidden_dropout_prob", type=float, default=0.5, help="hidden dropout p"
     )
     parser.add_argument("--initializer_range", type=float, default=0.02)
+    parser.add_argument("--xavier", type=bool, default=False)
     parser.add_argument("--max_seq_length", default=50, type=int)
 
     # train args

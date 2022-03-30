@@ -30,7 +30,10 @@ class S3RecModel(nn.Module):
         self.map_norm = nn.Linear(args.hidden_size, args.hidden_size)
         self.sp_norm = nn.Linear(args.hidden_size, args.hidden_size)
         self.criterion = nn.BCELoss(reduction="none") # BCE를 줄이는 식으로 한다.
-        self.apply(self.init_weights)
+        if args.xavier:
+            self.apply(self.xavier_init_weights)
+        else:
+            self.apply(self.init_weights)
 
     # process 9-3 AAP (Associated Attribute Prediction) [장르]
     # 영화 Sequence로 부터 속성을 생성하는 과정
@@ -244,6 +247,17 @@ class S3RecModel(nn.Module):
             # Slightly different from the TF version which uses truncated_normal for initialization
             # cf https://github.com/pytorch/pytorch/pull/5617
             module.weight.data.normal_(mean=0.0, std=self.args.initializer_range)
+        elif isinstance(module, LayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+        if isinstance(module, nn.Linear) and module.bias is not None:
+            module.bias.data.zero_()
+
+    def xavier_init_weights(self, module):
+        """Xavier Init weight 초기화"""
+        if isinstance(module, (nn.Linear, nn.Embedding)):
+            torch.nn.init.xavier_uniform_(module.weight)
+            module.bias.data.fill_(0.01)
         elif isinstance(module, LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
