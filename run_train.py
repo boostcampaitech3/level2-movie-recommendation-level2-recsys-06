@@ -12,7 +12,6 @@ from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from importlib import import_module
 from scipy import sparse
 
-from datasets import SASRecDataset
 from models import MultiVAE, loss_function_vae
 from trainers import FinetuneTrainer
 import bottleneck as bn
@@ -23,6 +22,8 @@ from utils import (
     get_user_seqs,
     set_seed,
 )
+
+import wandb
 
 args = None
 
@@ -440,7 +441,11 @@ if __name__ == "__main__":
     args.data_file = args.data_dir + "train_ratings.csv"
     item2attribute_file = args.data_dir + args.data_name + "_item2attributes.json"
 
-   
+    # wandb
+    wandb.login()
+    wandb.init(group="Multi-VAE", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_{args.epochs}_AdamW")
+    wandb.config = args
+
     ###############################################################################
     # Load data
     ###############################################################################
@@ -505,6 +510,13 @@ if __name__ == "__main__":
         epoch_start_time = time.time()
         train(model, criterion, optimizer, is_VAE=True)
         val_loss, n100, r10, r20, r50 = evaluate(model, criterion, vad_data_tr, vad_data_te, is_VAE=True)
+        wandb.log({
+            "val_loss" : val_loss,
+            "n100" : n100,
+            "r10" : r10,
+            "r20" : r20,
+            "r50" : r50
+        })
         print('-' * 100)
         print('| end of epoch {:3d} | time: {:4.2f}s | valid loss {:4.2f} | '
                 'n100 {:5.3f} | r10 {:5.3f} | r20 {:5.3f} | r50 {:5.3f}'.format(
