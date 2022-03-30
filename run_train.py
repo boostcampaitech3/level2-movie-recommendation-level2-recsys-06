@@ -25,7 +25,7 @@ def WandB():
         entity="recsys-06",  # Repository 느낌 변경 X
         name="DEEPFM_epoch20_batch128_test4",  # -> str : ex) "모델_파라티머_파라미터_파라미터", 훈련 정보에 대해 알아보기 쉽게
         notes="this is test",  # -> str commit의 메시지 처럼 좀 더 상세한 설명 log
-        group="DEEPFM",
+        group="DEEPFM", # 모델 이름으로 합시다.
         # 추가 요소
         # tags -> str[] baseline, production등 태그 기능.
         # save_code -> bool 코드 저장할지 말지 default false
@@ -183,7 +183,6 @@ def main():
     trainer.model.load_state_dict(torch.load(args.checkpoint_path))
     scores, result_info = trainer.test(0)
     print(result_info)
-
 
 if __name__ == "__main__":
     main()
