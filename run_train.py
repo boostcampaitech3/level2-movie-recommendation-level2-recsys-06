@@ -218,8 +218,6 @@ def evaluate(model, criterion, data_tr, data_te, is_VAE=False):
     r20_list = []
     r50_list = []
 
-    rating = pd.read_csv(os.path.join(args.data_dir)+'train_ratings.csv')
-
     
     with torch.no_grad():
         for start_idx in range(0, e_N, args.batch_size):
@@ -319,12 +317,18 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
             recon_batch = recon_batch.cpu().numpy()
             recon_batch[data.nonzero()] = -np.inf
 
+            # FIXME    
+            # 데이터 전처리 과정에서 show2id
+            # 따라서 결과를 뽑을 때는 다시 id2show해야함
+            # show2id는 원본 데이터 순서로 dict형태 (show(원본 영화 id), id(0번부터))
+            # 따라서 show2id id번째의 key값이 원래 영화 id
             for i in range(len(recon_batch)):
-                idxes = bn.argpartition(-recon_batch[i], 10)[:10]
+                idxes = bn.argpartition(-recon_batch[i], 10)[:10] # 유저에게 추천할 10개 영화를 가져옴
                 tmp = list()
                 count += 1
-                for j in range(len(idxes)):
-                    tmp.append(list(show2id.keys())[idxes[j]]) # id2show
+                # id2show 과정
+                for j in idxes:                    
+                    tmp.append(list(show2id.keys())[j]) # id2show # = tmp.append(raw_data['item'].unique()[j])
                 submission_item.append(tmp)
 
     submission_item = np.array(submission_item).reshape(-1, 1)
@@ -334,7 +338,7 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
     result = np.hstack((submission_user,submission_item))
 
     result = pd.DataFrame(result, columns=['user','item'])
-    result.to_csv(os.path.join(args.output_dir, 'submission.csv'), index=False)
+    result.to_csv(os.path.join(args.output_dir, 'submission_test.csv'), index=False)
 
     print("export submission done!")
 
@@ -349,46 +353,16 @@ def main():
     args.mask_id = max_item + 1
     args.attribute_size = attribute_size + 1
 
-    
-    
+    # if args.using_pretrain:
+    #     pretrained_path = os.path.join(args.output_dir, {args.using_pretrain_model_name}+'.pt')
+    #     try:
+    #         trainer.load(pretrained_path)
+    #         print(f"Load Checkpoint From {pretrained_path}!")
 
-    
-
-    # train_dataset = SASRecDataset(args, user_seq, data_type="train")
-    # train_sampler = RandomSampler(train_dataset)
-    # train_dataloader = DataLoader(
-    #     train_dataset, sampler=train_sampler, batch_size=args.batch_size
-    # )
-
-    # eval_dataset = SASRecDataset(args, user_seq, data_type="valid")
-    # eval_sampler = SequentialSampler(eval_dataset)
-    # eval_dataloader = DataLoader(
-    #     eval_dataset, sampler=eval_sampler, batch_size=args.batch_size
-    # )
-
-    # test_dataset = SASRecDataset(args, user_seq, data_type="test")
-    # test_sampler = SequentialSampler(test_dataset)
-    # test_dataloader = DataLoader(
-    #     test_dataset, sampler=test_sampler, batch_size=args.batch_size
-    # )
-
-
-    
-    if args.using_pretrain:
-        pretrained_path = os.path.join(args.output_dir, {args.using_pretrain_model_name}+'.pt')
-        try:
-            trainer.load(pretrained_path)
-            print(f"Load Checkpoint From {pretrained_path}!")
-
-        except FileNotFoundError:
-            print(f"{pretrained_path} Not Found! The Model is same as SASRec")
-    else:
-        print("Not using pretrained model. The Model is same as SASRec")
-
-    
-    
-
-
+    #     except FileNotFoundError:
+    #         print(f"{pretrained_path} Not Found! The Model is same as SASRec")
+    # else:
+    #     print("Not using pretrained model. The Model is same as SASRec")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -403,7 +377,7 @@ if __name__ == "__main__":
                         help='weight decay coefficient')
     parser.add_argument('--batch_size', type=int, default=500,
                         help='batch size')
-    parser.add_argument('--epochs', type=int, default=20,
+    parser.add_argument('--epochs', type=int, default=1,
                         help='upper epoch limit')
     parser.add_argument('--total_anneal_steps', type=int, default=200000,
                         help='the total number of gradient updates for annealing')
@@ -418,6 +392,7 @@ if __name__ == "__main__":
     parser.add_argument('--save', type=str, default='model.pt',
                         help='path to save the final model')
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
+    parser.add_argument("--wandb", type=bool, default=False, help="wandb")
     parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer type (default: Adam)')
     
     args = parser.parse_args()
@@ -442,9 +417,10 @@ if __name__ == "__main__":
     item2attribute_file = args.data_dir + args.data_name + "_item2attributes.json"
 
     # wandb
-    wandb.login()
-    wandb.init(group="Multi-VAE", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_{args.epochs}_AdamW")
-    wandb.config = args
+    if args.wandb:
+        wandb.login()
+        wandb.init(group="Multi-VAE", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_{args.epochs}_{args.optimizer}")
+        wandb.config = args
 
     ###############################################################################
     # Load data
@@ -510,13 +486,14 @@ if __name__ == "__main__":
         epoch_start_time = time.time()
         train(model, criterion, optimizer, is_VAE=True)
         val_loss, n100, r10, r20, r50 = evaluate(model, criterion, vad_data_tr, vad_data_te, is_VAE=True)
-        wandb.log({
-            "val_loss" : val_loss,
-            "n100" : n100,
-            "r10" : r10,
-            "r20" : r20,
-            "r50" : r50
-        })
+        if args.wandb:
+            wandb.log({
+                "val_loss" : val_loss,
+                "n100" : n100,
+                "r10" : r10,
+                "r20" : r20,
+                "r50" : r50
+            })
         print('-' * 100)
         print('| end of epoch {:3d} | time: {:4.2f}s | valid loss {:4.2f} | '
                 'n100 {:5.3f} | r10 {:5.3f} | r20 {:5.3f} | r50 {:5.3f}'.format(
@@ -526,15 +503,16 @@ if __name__ == "__main__":
 
         n_iter = epoch * len(range(0, N, args.batch_size))
 
-
         # Save the model if the n100 is the best we've seen so far.
         if r20 > best_r20:
             with open(args.checkpoint_path, 'wb') as f:
                 torch.save(model, f)
             best_r20 = n100
+            print(f"save model : {args.checkpoint_path}")
 
     # Load the best saved model.
     with open(args.checkpoint_path, 'rb') as f:
+        print(f"load model : {args.checkpoint_path}")
         model = torch.load(f)       
 
     
@@ -546,4 +524,4 @@ if __name__ == "__main__":
     print('=' * 100)
 
 
-    evaluate_submission(model, criterion=criterion, submission_data=loader.load_data("submission"), is_VAE=True)
+    evaluate_submission(model, criterion=loss_function_vae, submission_data=loader.load_data("submission"), is_VAE=True)
