@@ -417,6 +417,7 @@ if __name__ == "__main__":
     parser.add_argument('--save', type=str, default='model.pt',
                         help='path to save the final model')
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
+    parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer type (default: Adam)')
     
     args = parser.parse_args()
 
@@ -463,7 +464,12 @@ if __name__ == "__main__":
     p_dims = [200, 600, n_items]
     model = MultiVAE(p_dims).to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=args.wd)
+    opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: Adam
+    optimizer = opt_module(
+        filter(lambda p: p.requires_grad, model.parameters()),
+        lr=1e-3,
+        weight_decay=args.wd
+    )
     criterion = loss_function_vae
 
     ###############################################################################
