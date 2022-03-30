@@ -12,7 +12,6 @@ from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from importlib import import_module
 from scipy import sparse
 
-
 from datasets import SASRecDataset
 from models import MultiVAE, loss_function_vae
 from trainers import FinetuneTrainer
@@ -390,7 +389,7 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
     result = np.hstack((submission_user,submission_item))
 
     result = pd.DataFrame(result, columns=['user','item'])
-    result.to_csv('result.csv', index=False)
+    result.to_csv(os.path.join(args.output_dir, 'submission.csv'), index=False)
 
     print("export submission done!")
 
