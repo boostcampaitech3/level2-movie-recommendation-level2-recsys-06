@@ -277,6 +277,7 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
     e_N = submission_data.shape[0]
 
     raw_data = pd.read_csv(os.path.join(args.data_dir)+'train_ratings.csv')
+    # submission_data = pd.read_csv(os.path.join(args.data_dir)+'train_ratings.csv')
 
     unique_sid = pd.unique(raw_data['item'])
     unique_uid = pd.unique(raw_data['user'])
@@ -285,7 +286,7 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
 
     submission_user = list()
     submission_item = list()
-    count = 0
+    
     with torch.no_grad():
         for start_idx in range(0, e_N, args.batch_size):
             end_idx = min(start_idx + args.batch_size, s_N)
@@ -296,28 +297,26 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
             data_tensor = naive_sparse2tensor(data).to(device)
             if is_VAE :
               
-              if args.total_anneal_steps > 0:
-                  anneal = min(args.anneal_cap, 
-                                1. * update_count / args.total_anneal_steps)
-              else:
-                  anneal = args.anneal_cap
+            #   if args.total_anneal_steps > 0:
+            #       anneal = min(args.anneal_cap, 
+            #                     1. * update_count / args.total_anneal_steps)
+            #   else:
+            #       anneal = args.anneal_cap
 
-              recon_batch, mu, logvar = model(data_tensor)
-
-              loss = criterion(recon_batch, data_tensor, mu, logvar, anneal)
+                recon_batch, mu, logvar = model(data_tensor)
+            #   loss = criterion(recon_batch, data_tensor, mu, logvar, anneal)
 
             else :
-              recon_batch = model(data_tensor)
-              loss = criterion(recon_batch, data_tensor)
+               recon_batch = model(data_tensor)
+            #   loss = criterion(recon_batch, data_tensor)
 
 
-            total_loss += loss.item()
+            #total_loss += loss.item()
 
             # Exclude examples from training set
             recon_batch = recon_batch.cpu().numpy()
             recon_batch[data.nonzero()] = -np.inf
 
-            # FIXME    
             # 데이터 전처리 과정에서 show2id
             # 따라서 결과를 뽑을 때는 다시 id2show해야함
             # show2id는 원본 데이터 순서로 dict형태 (show(원본 영화 id), id(0번부터))
@@ -325,7 +324,6 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
             for i in range(len(recon_batch)):
                 idxes = bn.argpartition(-recon_batch[i], 10)[:10] # 유저에게 추천할 10개 영화를 가져옴
                 tmp = list()
-                count += 1
                 # id2show 과정
                 for j in idxes:                    
                     tmp.append(list(show2id.keys())[j]) # id2show # = tmp.append(raw_data['item'].unique()[j])
@@ -338,9 +336,9 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
     result = np.hstack((submission_user,submission_item))
 
     result = pd.DataFrame(result, columns=['user','item'])
-    result.to_csv(os.path.join(args.output_dir, 'submission_test.csv'), index=False)
+    result.to_csv(os.path.join(args.output_dir, f'submission_{args.epochs}_{args.optimizer}.csv'), index=False)
 
-    print("export submission done!")
+    print("export submission : ", os.path.join(args.output_dir, f'submission_{args.epochs}.csv'))
 
 def main():
     user_seq, max_item, valid_rating_matrix, test_rating_matrix, _ = get_user_seqs(
@@ -370,7 +368,7 @@ if __name__ == "__main__":
     parser.add_argument("--model_name", default="MultiVAE", type=str)
     parser.add_argument("--data_dir", default="/opt/ml/input/data/train/", type=str)
     parser.add_argument("--data_name", default="Ml", type=str)
-    parser.add_argument("--output_dir", default="output/", type=str)
+    parser.add_argument("--output_dir", default="/opt/ml/input/code/output/", type=str)
     parser.add_argument('--lr', type=float, default=1e-4,
                     help='initial learning rate')
     parser.add_argument('--wd', type=float, default=0.00,
@@ -416,11 +414,6 @@ if __name__ == "__main__":
     args.data_file = args.data_dir + "train_ratings.csv"
     item2attribute_file = args.data_dir + args.data_name + "_item2attributes.json"
 
-    # wandb
-    if args.wandb:
-        wandb.login()
-        wandb.init(group="Multi-VAE", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_{args.epochs}_{args.optimizer}")
-        wandb.config = args
 
     ###############################################################################
     # Load data
@@ -449,7 +442,7 @@ if __name__ == "__main__":
     optimizer = opt_module(
         filter(lambda p: p.requires_grad, model.parameters()),
         lr=1e-3,
-        weight_decay=args.wd
+        #weight_decay=args.wd
     )
     criterion = loss_function_vae
 
@@ -476,10 +469,16 @@ if __name__ == "__main__":
 
 
     # save model
-    checkpoint = args_str + ".pt"
+    checkpoint = f"{args_str}_{args.epochs}_{args.optimizer}.pt"
     args.checkpoint_path = os.path.join(args.output_dir, checkpoint)
 
     early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
+
+    # wandb
+    if args.wandb:
+        wandb.login()
+        wandb.init(group="Multi-VAE", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_{args.epochs}_{args.optimizer}")
+        wandb.config = args
     
 
     for epoch in range(1, args.epochs + 1):
@@ -523,5 +522,9 @@ if __name__ == "__main__":
             'r50 {:4.2f}'.format(test_loss, n100, r10, r20, r50))
     print('=' * 100)
 
+    # Load the best saved model.
+    with open(args.checkpoint_path, 'rb') as f:
+        print(f"load model : {args.checkpoint_path}")
+        model = torch.load(f)    
 
-    evaluate_submission(model, criterion=loss_function_vae, submission_data=loader.load_data("submission"), is_VAE=True)
+    evaluate_submission(model, criterion=loss_function_vae, submission_data=submission_data, is_VAE=True)
