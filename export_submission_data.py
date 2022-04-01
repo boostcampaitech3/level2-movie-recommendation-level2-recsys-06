@@ -85,6 +85,6 @@ def numerize(tp, profile2id, show2id):
 train_data = numerize(raw_data, profile2id, show2id)
 #pd.DataFrame(data={'key':profile2id}).to_csv(os.path.join(pro_dir, "profile2id.csv"))
 #pd.DataFrame(show2id).to_csv(os.path.join(pro_dir, "show2id.csv"))
-pd.DataFrame(data={'uid' :train_data['uid'], 'sid' : train_data['sid']}).to_csv(os.path.join(pro_dir, 'submission_data2.csv'), index=False)
+pd.DataFrame(data={'uid' :train_data['uid'], 'sid' : train_data['sid']}).to_csv('/opt/ml/input/data/eval/submission_data2.csv', index=False)
 
 print("Done!")
