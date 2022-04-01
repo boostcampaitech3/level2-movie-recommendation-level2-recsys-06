@@ -32,8 +32,11 @@ class DataLoader():
     Load Movielens dataset
     '''
     def __init__(self, path):
-        
-        self.pro_dir = os.path.join(path, 'pro_sg')
+        if args.data_process == 0:
+            self.pro_dir = os.path.join(path, 'pro_sg')
+        else:
+            self.pro_dir = os.path.join(path, f'pro_sg_{args.data_process}')
+            
         assert os.path.exists(self.pro_dir), "Preprocessed files do not exist. Run data.py"
 
         self.n_items = self.load_n_items()
@@ -60,7 +63,6 @@ class DataLoader():
     
     def _load_train_data(self):
         path = os.path.join(self.pro_dir, 'train.csv')
-        
         tp = pd.read_csv(path)
         n_users = tp['uid'].max() + 1
 
@@ -90,7 +92,7 @@ class DataLoader():
         return data_tr, data_te
 
     def _load_submission_data(self, datatype="submission"):
-        path = os.path.join(self.pro_dir, '{}_data2.csv'.format(datatype))
+        path = '/opt/ml/input/data/eval/submission_data2.csv'
         
         tp = pd.read_csv(path)
         n_users = tp['uid'].max() + 1
@@ -276,7 +278,7 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
     e_idxlist = list(range(submission_data.shape[0]))
     e_N = submission_data.shape[0]
 
-    raw_data = pd.read_csv(os.path.join(args.data_dir)+'train_ratings.csv')
+    raw_data = pd.read_csv('/opt/ml/input/data/train/train_ratings.csv')
     # submission_data = pd.read_csv(os.path.join(args.data_dir)+'train_ratings.csv')
 
     unique_sid = pd.unique(raw_data['item'])
@@ -297,21 +299,21 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
             data_tensor = naive_sparse2tensor(data).to(device)
             if is_VAE :
               
-            #   if args.total_anneal_steps > 0:
-            #       anneal = min(args.anneal_cap, 
-            #                     1. * update_count / args.total_anneal_steps)
-            #   else:
-            #       anneal = args.anneal_cap
+                if args.total_anneal_steps > 0:
+                     anneal = min(args.anneal_cap, 
+                                1. * update_count / args.total_anneal_steps)
+                else:
+                    anneal = args.anneal_cap
 
                 recon_batch, mu, logvar = model(data_tensor)
-            #   loss = criterion(recon_batch, data_tensor, mu, logvar, anneal)
+                loss = criterion(recon_batch, data_tensor, mu, logvar, anneal)
 
             else :
-               recon_batch = model(data_tensor)
-            #   loss = criterion(recon_batch, data_tensor)
+                recon_batch = model(data_tensor)
+                loss = criterion(recon_batch, data_tensor)
 
 
-            #total_loss += loss.item()
+            total_loss += loss.item()
 
             # Exclude examples from training set
             recon_batch = recon_batch.cpu().numpy()
@@ -336,9 +338,15 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
     result = np.hstack((submission_user,submission_item))
 
     result = pd.DataFrame(result, columns=['user','item'])
-    result.to_csv(os.path.join(args.output_dir, f'submission_{args.epochs}_{args.optimizer}.csv'), index=False)
+    #result.to_csv(os.path.join(args.output_dir, f'submission_{args.epochs}_{args.optimizer}.csv'), index=False)
 
-    print("export submission : ", os.path.join(args.output_dir, f'submission_{args.epochs}.csv'))
+    if args.data_process == 0:
+        result.to_csv(os.path.join(args.output_dir, f'submission_{args.epochs}_{args.optimizer}.csv'), index=False)
+        print("export submission : ", os.path.join(args.output_dir, f'submission_{args.epochs}_{args.optimizer}.csv'))
+    else :
+        result.to_csv(os.path.join(args.output_dir, f'submission_data_{args.data_process}.csv'), index=False)
+        print("export submission : ", os.path.join(args.output_dir, f'submission_data_{args.data_process}.csv'))
+    
 
 def main():
     user_seq, max_item, valid_rating_matrix, test_rating_matrix, _ = get_user_seqs(
@@ -392,6 +400,7 @@ if __name__ == "__main__":
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
     parser.add_argument("--wandb", type=bool, default=False, help="wandb")
     parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer type (default: Adam)')
+    parser.add_argument('--data_process', type=int, default=0,  help='data process')
     
     args = parser.parse_args()
 
@@ -418,7 +427,7 @@ if __name__ == "__main__":
     ###############################################################################
     # Load data
     ###############################################################################
-
+    
     loader = DataLoader(args.data_dir)
 
     n_items = loader.load_n_items()
@@ -451,7 +460,7 @@ if __name__ == "__main__":
     ###############################################################################
 
     #best_n100 = -np.inf
-    best_r20 = -np.inf
+    best_r10 = -np.inf
     update_count = 0
 
 
@@ -469,7 +478,10 @@ if __name__ == "__main__":
 
 
     # save model
-    checkpoint = f"{args_str}_{args.epochs}_{args.optimizer}.pt"
+    if args.data_process == 0:
+        checkpoint = f"{args_str}_{args.epochs}_{args.optimizer}.pt"
+    else :
+        checkpoint = f"{args_str}_data_{args.data_process}.pt"
     args.checkpoint_path = os.path.join(args.output_dir, checkpoint)
 
     early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
@@ -477,7 +489,8 @@ if __name__ == "__main__":
     # wandb
     if args.wandb:
         wandb.login()
-        wandb.init(group="Multi-VAE", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_{args.epochs}_{args.optimizer}")
+        #wandb.init(group="Multi-VAE", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_{args.epochs}_{args.optimizer}")
+        wandb.init(group="Multi-VAE_data_process", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_{args.data_process}_{args.optimizer}")
         wandb.config = args
     
 
@@ -502,11 +515,16 @@ if __name__ == "__main__":
 
         n_iter = epoch * len(range(0, N, args.batch_size))
 
+
+
         # Save the model if the n100 is the best we've seen so far.
-        if r20 > best_r20:
+        # with open(args.checkpoint_path, 'wb') as f:
+        #     torch.save(model, f)
+        # print(f"save model : {args.checkpoint_path}")
+        if r10 > best_r10:
             with open(args.checkpoint_path, 'wb') as f:
                 torch.save(model, f)
-            best_r20 = n100
+            best_r10 = r10
             print(f"save model : {args.checkpoint_path}")
 
     # Load the best saved model.
