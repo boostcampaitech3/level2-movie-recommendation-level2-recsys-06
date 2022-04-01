@@ -400,7 +400,7 @@ if __name__ == "__main__":
     parser.add_argument("--wandb", type=bool, default=False, help="wandb") # wandb 사용 여부
     parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer type (default: Adam)') # optimizer 설정
     parser.add_argument('--data_process', type=int, default=0,  help='data process') # 최근 데이터를 얼마나 사용할 것인가
-    parser.add_argument('--data_random_process', type=int, default=0,  help='data random process')
+    parser.add_argument('--data_random_process', type=int, default=0,  help='data random process') # 데이터를 어느 비율만큼 랜덤으로 뽑을 것인가
     
     args = parser.parse_args()
 
