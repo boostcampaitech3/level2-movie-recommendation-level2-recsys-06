@@ -164,7 +164,7 @@ print("테스트 데이터에 사용될 사용자 수:", len(te_users))
 
 ##훈련 데이터에 해당하는 아이템들
 #Train에는 전체 데이터를 사용합니다.
-train_plays = raw_data.loc[raw_data['user'].isin(tr_users)]
+train_plays = train_processing.loc[train_processing['user'].isin(tr_users)]
 
 ##아이템 ID
 unique_sid = pd.unique(train_plays['item'])
@@ -193,20 +193,20 @@ test_plays_tr, test_plays_te = split_train_test_proportion(test_plays)
 
 
 train_data = numerize(train_plays, profile2id, show2id)
-train_plays.astype(int).to_csv(os.path.join(pro_dir, f'train.csv'), index=False)
+train_data.astype(int).to_csv(os.path.join(pro_dir, f'train.csv'), index=False)
 
 
 vad_data_tr = numerize(vad_plays_tr, profile2id, show2id)
-vad_plays_tr.astype(int).to_csv(os.path.join(pro_dir, f'validation_tr.csv'), index=False)
+vad_data_tr.astype(int).to_csv(os.path.join(pro_dir, f'validation_tr.csv'), index=False)
 
 vad_data_te = numerize(vad_plays_te, profile2id, show2id)
-vad_plays_te.astype(int).to_csv(os.path.join(pro_dir, f'validation_te.csv'), index=False)
+vad_data_te.astype(int).to_csv(os.path.join(pro_dir, f'validation_te.csv'), index=False)
 
 test_data_tr = numerize(test_plays_tr, profile2id, show2id)
-test_plays_tr.astype(int).to_csv(os.path.join(pro_dir, f'test_tr.csv'), index=False)
+test_data_tr.astype(int).to_csv(os.path.join(pro_dir, f'test_tr.csv'), index=False)
 
 test_data_te = numerize(test_plays_te, profile2id, show2id)
-test_plays_te.astype(int).to_csv(os.path.join(pro_dir, f'test_te.csv'), index=False)
+test_data_te.astype(int).to_csv(os.path.join(pro_dir, f'test_te.csv'), index=False)
 
 print("Done!")
 
