@@ -35,10 +35,14 @@ class DataLoader():
     def __init__(self, path):
 
         # 데이터를 불러올 폴더 지정
-        if args.data_process == 0: # 기본 값
-            self.pro_dir = os.path.join(path, 'pro_sg')
-        else: # 최근 데이터만 사용하는 경우
+
+        if args.data_process != 0:# 최근 데이터만 사용하는 경우
             self.pro_dir = os.path.join(path, f'pro_sg_{args.data_process}')
+        elif args.data_random_process != 0:# 일정한 비율로 랜덤으로 데이터를 사용하는 경우
+            self.pro_dir = os.path.join(path, f'pro_sg_random_{args.data_random_process}')
+        else: # 기본값
+            self.pro_dir = os.path.join(path, 'pro_sg')
+            
             
         assert os.path.exists(self.pro_dir), "Preprocessed files do not exist. Run data.py"
 
@@ -350,15 +354,17 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
     result = pd.DataFrame(result, columns=['user','item'])
     
     # XXX submission export 
-    if args.data_process == 0: # 기본값
-        # submission_epoch 수_optimizer.csv
-        result.to_csv(os.path.join(args.output_dir, f'submission_{args.epochs}_{args.optimizer}.csv'), index=False)
-        print("export submission : ", os.path.join(args.output_dir, f'submission_{args.epochs}_{args.optimizer}.csv'))
-    else : # 최근 데이터 일부만 사용한 경우
+    if args.data_process != 0: # 최근 데이터 일부만 사용한 경우
         # submission_data_최근 데이터 갯수.csv
         result.to_csv(os.path.join(args.output_dir, f'submission_data_{args.data_process}.csv'), index=False)
         print("export submission : ", os.path.join(args.output_dir, f'submission_data_{args.data_process}.csv'))
-    
+    elif args.data_random_process != 0:
+        result.to_csv(os.path.join(args.output_dir, f'submission_data_random_{args.data_random_process}.csv'), index=False)
+        print("export submission : ", os.path.join(args.output_dir, f'submission_data_random_{args.data_random_process}.csv'))
+    else : # 기본값             
+        # submission_epoch 수_optimizer.csv
+        result.to_csv(os.path.join(args.output_dir, f'submission_{args.epochs}_{args.optimizer}.csv'), index=False)
+        print("export submission : ", os.path.join(args.output_dir, f'submission_{args.epochs}_{args.optimizer}.csv'))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -394,6 +400,7 @@ if __name__ == "__main__":
     parser.add_argument("--wandb", type=bool, default=False, help="wandb") # wandb 사용 여부
     parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer type (default: Adam)') # optimizer 설정
     parser.add_argument('--data_process', type=int, default=0,  help='data process') # 최근 데이터를 얼마나 사용할 것인가
+    parser.add_argument('--data_random_process', type=int, default=0,  help='data random process')
     
     args = parser.parse_args()
 
@@ -465,12 +472,16 @@ if __name__ == "__main__":
     # save model
     # XXX 저장 model 이름 변경
     # 여러 실험하기 위해 나누습니다
-    if args.data_process == 0:  # 기본값
-        # 모델이름-데이터이름_epoch 수_optimizer.pt
-        checkpoint = f"{args_str}_{args.epochs}_{args.optimizer}.pt"
-    else : # 최근 데이터 일부만 사용하는 경우
+    
+    if args.data_process != 0 : # 최근 데이터 일부만 사용하는 경우
         # 모델이름-데이터이름_data_최근 데이터 갯수
         checkpoint = f"{args_str}_data_{args.data_process}.pt"
+    elif args.data_random_process != 0 : # 최근 데이터 일부만 사용하는 경우
+        # 모델이름-데이터이름_data_random_비율
+        checkpoint = f"{args_str}_data_random_{args.data_random_process}.pt"
+    else : # 기본값
+        # 모델이름-데이터이름_epoch 수_optimizer.pt
+        checkpoint = f"{args_str}_{args.epochs}_{args.optimizer}.pt"
     args.checkpoint_path = os.path.join(args.output_dir, checkpoint)
 
     early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
@@ -479,8 +490,13 @@ if __name__ == "__main__":
     # 기본 값은 wandb를 사용하지 않습니다.
     if args.wandb:
         wandb.login()
-        #wandb.init(group="Multi-VAE", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_{args.epochs}_{args.optimizer}")
-        wandb.init(group="Multi-VAE_data_process", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_{args.data_process}_{args.optimizer}")
+        if args.data_random_process != 0 : # 최근 데이터만 뽑을 때
+            wandb.init(group="Multi-VAE_data_process", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_{args.data_process}_{args.optimizer}")
+        elif args.data_process != 0: # 데이터를 랜덤으로 뽑을 때
+            wandb.init(group="Multi-VAE_data_process", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_random_{args.data_random_process}_{args.optimizer}")
+        else : # 기본값
+            wandb.init(group="Multi-VAE", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_{args.epochs}_{args.optimizer}")
+        
         wandb.config = args
     
 
