@@ -199,16 +199,16 @@ train_data.astype(int).to_csv(os.path.join(pro_dir, f'train.csv'), index=False)
 
 
 vad_data_tr = numerize(vad_plays_tr, profile2id, show2id)
-train_data.astype(int).to_csv(os.path.join(pro_dir, f'validation_tr.csv'), index=False)
+vad_data_tr.astype(int).to_csv(os.path.join(pro_dir, f'validation_tr.csv'), index=False)
 
 vad_data_te = numerize(vad_plays_te, profile2id, show2id)
-train_data.astype(int).to_csv(os.path.join(pro_dir, f'validation_te.csv'), index=False)
+vad_data_te.astype(int).to_csv(os.path.join(pro_dir, f'validation_te.csv'), index=False)
 
 test_data_tr = numerize(test_plays_tr, profile2id, show2id)
-train_data.astype(int).to_csv(os.path.join(pro_dir, f'test_tr.csv'), index=False)
+test_data_tr.astype(int).to_csv(os.path.join(pro_dir, f'test_tr.csv'), index=False)
 
 test_data_te = numerize(test_plays_te, profile2id, show2id)
-train_data.astype(int).to_csv(os.path.join(pro_dir, f'test_te.csv'), index=False)
+test_data_te.astype(int).to_csv(os.path.join(pro_dir, f'test_te.csv'), index=False)
 
 print("Done!")
 
