@@ -40,6 +40,8 @@ class DataLoader():
             self.pro_dir = os.path.join(path, f'pro_sg_{args.data_process}')
         elif args.data_random_process != 0:# 일정한 비율로 랜덤으로 데이터를 사용하는 경우
             self.pro_dir = os.path.join(path, f'pro_sg_random_{args.data_random_process}')
+        elif args.train_all == True:
+            self.pro_dir = os.path.join(path, 'pro_sg_all')
         else: # 기본값
             self.pro_dir = os.path.join(path, 'pro_sg')
             
@@ -361,6 +363,9 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
     elif args.data_random_process != 0:
         result.to_csv(os.path.join(args.output_dir, f'submission_data_random_{args.data_random_process}.csv'), index=False)
         print("export submission : ", os.path.join(args.output_dir, f'submission_data_random_{args.data_random_process}.csv'))
+    elif args.train_all == True:
+        result.to_csv(os.path.join(args.output_dir, f'submission_data_all_{args.batch_size}.csv'), index=False)
+        print("export submission : ", os.path.join(args.output_dir, f'submission_data_all_{args.batch_size}.csv'))
     else : # 기본값             
         # submission_epoch 수_optimizer.csv
         result.to_csv(os.path.join(args.output_dir, f'submission_{args.epochs}_{args.optimizer}.csv'), index=False)
@@ -379,7 +384,7 @@ if __name__ == "__main__":
                         help='weight decay coefficient')
     parser.add_argument('--batch_size', type=int, default=500,
                         help='batch size')
-    parser.add_argument('--epochs', type=int, default=1,
+    parser.add_argument('--epochs', type=int, default=20,
                         help='upper epoch limit')
     parser.add_argument('--total_anneal_steps', type=int, default=200000,
                         help='the total number of gradient updates for annealing')
@@ -401,6 +406,7 @@ if __name__ == "__main__":
     parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer type (default: Adam)') # optimizer 설정
     parser.add_argument('--data_process', type=int, default=0,  help='data process') # 최근 데이터를 얼마나 사용할 것인가
     parser.add_argument('--data_random_process', type=int, default=0,  help='data random process') # 데이터를 어느 비율만큼 랜덤으로 뽑을 것인가
+    parser.add_argument('--train_all', type=bool, default=False,  help='use all training set')
     
     args = parser.parse_args()
 
@@ -430,8 +436,9 @@ if __name__ == "__main__":
 
     n_items = loader.load_n_items()
     train_data = loader.load_data('train')
-    vad_data_tr, vad_data_te = loader.load_data('validation')
-    test_data_tr, test_data_te = loader.load_data('test')
+    if args.train_all == False:
+        vad_data_tr, vad_data_te = loader.load_data('validation')
+        test_data_tr, test_data_te = loader.load_data('test')
 
     # XXX submission data 추가
     submission_data = loader.load_data('submission')
@@ -463,8 +470,6 @@ if __name__ == "__main__":
     best_r10 = -np.inf
     update_count = 0
 
-
-
     # save model args
     args_str = f"{args.model_name}-{args.data_name}"
     args.log_file = os.path.join(args.output_dir, args_str + ".txt")
@@ -479,6 +484,8 @@ if __name__ == "__main__":
     elif args.data_random_process != 0 : # 최근 데이터 일부만 사용하는 경우
         # 모델이름-데이터이름_data_random_비율
         checkpoint = f"{args_str}_data_random_{args.data_random_process}.pt"
+    elif args.train_all == True:
+        checkpoint = f"{args_str}_data_random_train_all.pt"
     else : # 기본값
         # 모델이름-데이터이름_epoch 수_optimizer.pt
         checkpoint = f"{args_str}_{args.epochs}_{args.optimizer}.pt"
@@ -503,7 +510,8 @@ if __name__ == "__main__":
     for epoch in range(1, args.epochs + 1):
         epoch_start_time = time.time()
         train(model, criterion, optimizer, is_VAE=True) # 훈련
-        val_loss, n100, r10, r20, r50 = evaluate(model, criterion, vad_data_tr, vad_data_te, is_VAE=True) # 검증 데이터 테스트
+        if args.train_all == False:
+            val_loss, n100, r10, r20, r50 = evaluate(model, criterion, vad_data_tr, vad_data_te, is_VAE=True) # 검증 데이터 테스트
         # XXX wnadb 설정
         if args.wandb:
             wandb.log({
@@ -513,25 +521,29 @@ if __name__ == "__main__":
                 "r20" : r20,
                 "r50" : r50
             })
-        print('-' * 100)
-        print('| end of epoch {:3d} | time: {:4.2f}s | valid loss {:4.2f} | '
-                'n100 {:5.3f} | r10 {:5.3f} | r20 {:5.3f} | r50 {:5.3f}'.format(
-                    epoch, time.time() - epoch_start_time, val_loss,
-                    n100, r10, r20, r50))
-        print('-' * 100)
+        if args.train_all == False:
+            print('-' * 100)
+            print('| end of epoch {:3d} | time: {:4.2f}s | valid loss {:4.2f} | '
+                    'n100 {:5.3f} | r10 {:5.3f} | r20 {:5.3f} | r50 {:5.3f}'.format(
+                        epoch, time.time() - epoch_start_time, val_loss,
+                        n100, r10, r20, r50))
+            print('-' * 100)
 
-        n_iter = epoch * len(range(0, N, args.batch_size))
-
-
+            n_iter = epoch * len(range(0, N, args.batch_size))
 
         # Save the model if the n100 is the best we've seen so far.
         # with open(args.checkpoint_path, 'wb') as f:
         #     torch.save(model, f)
         # print(f"save model : {args.checkpoint_path}")
-        if r10 > best_r10:
+        if args.train_all == False:
+            if r10 > best_r10:
+                with open(args.checkpoint_path, 'wb') as f:
+                    torch.save(model, f)
+                best_r10 = r10
+                print(f"save model : {args.checkpoint_path}")
+        else:
             with open(args.checkpoint_path, 'wb') as f:
                 torch.save(model, f)
-            best_r10 = r10
             print(f"save model : {args.checkpoint_path}")
 
     # Load the best saved model.
@@ -541,16 +553,17 @@ if __name__ == "__main__":
 
     
     # Run on test data.
-    test_loss, n100, r10, r20, r50 = evaluate(model, criterion, test_data_tr, test_data_te, is_VAE=True)
-    print('=' * 100)
-    print('| End of training | test loss {:4.2f} | n100 {:4.2f} | r10 {:4.2f} | r20 {:4.2f} | '
-            'r50 {:4.2f}'.format(test_loss, n100, r10, r20, r50))
-    print('=' * 100)
+    if args.train_all == False:
+        test_loss, n100, r10, r20, r50 = evaluate(model, criterion, test_data_tr, test_data_te, is_VAE=True)
+        print('=' * 100)
+        print('| End of training | test loss {:4.2f} | n100 {:4.2f} | r10 {:4.2f} | r20 {:4.2f} | '
+                'r50 {:4.2f}'.format(test_loss, n100, r10, r20, r50))
+        print('=' * 100)
 
-    # Load the best saved model.
-    with open(args.checkpoint_path, 'rb') as f:
-        print(f"load model : {args.checkpoint_path}")
-        model = torch.load(f)    
+        # Load the best saved model.
+        with open(args.checkpoint_path, 'rb') as f:
+            print(f"load model : {args.checkpoint_path}")
+            model = torch.load(f)    
 
     # XXX submission 평가
     evaluate_submission(model, criterion=loss_function_vae, submission_data=submission_data, is_VAE=True)
