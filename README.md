@@ -1,5 +1,5 @@
 # MultiVAE(hyeji)
-- 가장 좋은 모델 : python run_train.py --wd 0.0005 —batch_size 16 —optimizer ‘RMSprop’
+- 가장 좋은 모델 : --batch_size 16 --optimizer ‘RMSprop’ --train_all True
 - TODO tree에서 XXX로 표시한 부분이 수정한 부분입니다.
 ## run_train.py
 - 결과를 뽑기 위한 evaluate_submission 함수가 추가되었습니다.
