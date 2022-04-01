@@ -490,9 +490,9 @@ if __name__ == "__main__":
     # 기본 값은 wandb를 사용하지 않습니다.
     if args.wandb:
         wandb.login()
-        if args.data_random_process != 0 : # 최근 데이터만 뽑을 때
+        if args.data_process != 0 : # 최근 데이터만 뽑을 때
             wandb.init(group="Multi-VAE_data_process", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_{args.data_process}_{args.optimizer}")
-        elif args.data_process != 0: # 데이터를 랜덤으로 뽑을 때
+        elif args.data_random_process != 0: # 데이터를 랜덤으로 뽑을 때
             wandb.init(group="Multi-VAE_data_process", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_random_{args.data_random_process}_{args.optimizer}")
         else : # 기본값
             wandb.init(group="Multi-VAE", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_{args.epochs}_{args.optimizer}")
