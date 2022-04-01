@@ -27,14 +27,17 @@ import wandb
 
 args = None
 
+# XXX DataLoader 클래스에 submission 추가, 경로 수정
 class DataLoader():
     '''
     Load Movielens dataset
     '''
     def __init__(self, path):
-        if args.data_process == 0:
+
+        # 데이터를 불러올 폴더 지정
+        if args.data_process == 0: # 기본 값
             self.pro_dir = os.path.join(path, 'pro_sg')
-        else:
+        else: # 최근 데이터만 사용하는 경우
             self.pro_dir = os.path.join(path, f'pro_sg_{args.data_process}')
             
         assert os.path.exists(self.pro_dir), "Preprocessed files do not exist. Run data.py"
@@ -91,6 +94,8 @@ class DataLoader():
                                     (rows_te, cols_te)), dtype='float64', shape=(end_idx - start_idx + 1, self.n_items))
         return data_tr, data_te
 
+    # XXX submission csv 불러오기
+    # submission_data2.csv는 export_submission_data 코드를 통해 export할 수 있습니다.
     def _load_submission_data(self, datatype="submission"):
         path = '/opt/ml/input/data/eval/submission_data2.csv'
         
@@ -207,6 +212,7 @@ def train(model, criterion, optimizer, is_VAE = False):
             start_time = time.time()
             train_loss = 0.0
 
+# XXX evaluate 함수에 r10 추가
 def evaluate(model, criterion, data_tr, data_te, is_VAE=False):
     # Turn on evaluation mode
 
@@ -216,7 +222,7 @@ def evaluate(model, criterion, data_tr, data_te, is_VAE=False):
     e_idxlist = list(range(data_tr.shape[0]))
     e_N = data_tr.shape[0]
     n100_list = []
-    r10_list = []
+    r10_list = [] # r10 추가
     r20_list = []
     r50_list = []
 
@@ -252,11 +258,11 @@ def evaluate(model, criterion, data_tr, data_te, is_VAE=False):
             recon_batch[data.nonzero()] = -np.inf
 
             n100 = NDCG_binary_at_k_batch(recon_batch, heldout_data, 100)
-            r10 = Recall_at_k_batch(recon_batch, heldout_data, 10)
+            r10 = Recall_at_k_batch(recon_batch, heldout_data, 10) # r10 추가
             r20 = Recall_at_k_batch(recon_batch, heldout_data, 20)
             r50 = Recall_at_k_batch(recon_batch, heldout_data, 50)
 
-            r10_list.append(r10)
+            r10_list.append(r10) # r10 추가
             n100_list.append(n100)
             r20_list.append(r20)
             r50_list.append(r50)
@@ -265,10 +271,13 @@ def evaluate(model, criterion, data_tr, data_te, is_VAE=False):
     n100_list = np.concatenate(n100_list)
     r20_list = np.concatenate(r20_list)
     r50_list = np.concatenate(r50_list)
-    r10_list = np.concatenate(r10_list)
+    r10_list = np.concatenate(r10_list) # r10 추가
 
+    # r10 추가
     return total_loss, np.mean(n100_list), np.mean(r10_list), np.mean(r20_list), np.mean(r50_list)
 
+# XXX submission 평가
+# evaluation 함수와 비슷합니다.
 def evaluate_submission(model, criterion, submission_data, is_VAE=False):
     # Turn on evaluation mode
 
@@ -279,7 +288,6 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
     e_N = submission_data.shape[0]
 
     raw_data = pd.read_csv('/opt/ml/input/data/train/train_ratings.csv')
-    # submission_data = pd.read_csv(os.path.join(args.data_dir)+'train_ratings.csv')
 
     unique_sid = pd.unique(raw_data['item'])
     unique_uid = pd.unique(raw_data['user'])
@@ -293,7 +301,8 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
         for start_idx in range(0, e_N, args.batch_size):
             end_idx = min(start_idx + args.batch_size, s_N)
             data = submission_data[e_idxlist[start_idx:end_idx]]
-            # heldout_data = data_te[e_idxlist[start_idx:end_idx]]
+            # true 값은 모르므로 heldout_data는 주석처리
+            # heldout_data = data_te[e_idxlist[start_idx:end_idx]] 
 
             device = torch.device("cuda" if args.cuda else "cpu")
             data_tensor = naive_sparse2tensor(data).to(device)
@@ -318,7 +327,8 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
             # Exclude examples from training set
             recon_batch = recon_batch.cpu().numpy()
             recon_batch[data.nonzero()] = -np.inf
-
+            
+            # XXX submission 결과
             # 데이터 전처리 과정에서 show2id
             # 따라서 결과를 뽑을 때는 다시 id2show해야함
             # show2id는 원본 데이터 순서로 dict형태 (show(원본 영화 id), id(0번부터))
@@ -338,37 +348,17 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
     result = np.hstack((submission_user,submission_item))
 
     result = pd.DataFrame(result, columns=['user','item'])
-    #result.to_csv(os.path.join(args.output_dir, f'submission_{args.epochs}_{args.optimizer}.csv'), index=False)
-
-    if args.data_process == 0:
+    
+    # XXX submission export 
+    if args.data_process == 0: # 기본값
+        # submission_epoch 수_optimizer.csv
         result.to_csv(os.path.join(args.output_dir, f'submission_{args.epochs}_{args.optimizer}.csv'), index=False)
         print("export submission : ", os.path.join(args.output_dir, f'submission_{args.epochs}_{args.optimizer}.csv'))
-    else :
+    else : # 최근 데이터 일부만 사용한 경우
+        # submission_data_최근 데이터 갯수.csv
         result.to_csv(os.path.join(args.output_dir, f'submission_data_{args.data_process}.csv'), index=False)
         print("export submission : ", os.path.join(args.output_dir, f'submission_data_{args.data_process}.csv'))
     
-
-def main():
-    user_seq, max_item, valid_rating_matrix, test_rating_matrix, _ = get_user_seqs(
-        args.data_file
-    )
-
-    item2attribute, attribute_size = get_item2attribute_json(item2attribute_file)
-
-    args.item_size = max_item + 2
-    args.mask_id = max_item + 1
-    args.attribute_size = attribute_size + 1
-
-    # if args.using_pretrain:
-    #     pretrained_path = os.path.join(args.output_dir, {args.using_pretrain_model_name}+'.pt')
-    #     try:
-    #         trainer.load(pretrained_path)
-    #         print(f"Load Checkpoint From {pretrained_path}!")
-
-    #     except FileNotFoundError:
-    #         print(f"{pretrained_path} Not Found! The Model is same as SASRec")
-    # else:
-    #     print("Not using pretrained model. The Model is same as SASRec")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -398,9 +388,12 @@ if __name__ == "__main__":
     parser.add_argument('--save', type=str, default='model.pt',
                         help='path to save the final model')
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
-    parser.add_argument("--wandb", type=bool, default=False, help="wandb")
-    parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer type (default: Adam)')
-    parser.add_argument('--data_process', type=int, default=0,  help='data process')
+
+    # XXX 추가한 args parse
+    # dafault값은 모두 기존 코드와 동일한 기본값입니다.
+    parser.add_argument("--wandb", type=bool, default=False, help="wandb") # wandb 사용 여부
+    parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer type (default: Adam)') # optimizer 설정
+    parser.add_argument('--data_process', type=int, default=0,  help='data process') # 최근 데이터를 얼마나 사용할 것인가
     
     args = parser.parse_args()
 
@@ -417,8 +410,6 @@ if __name__ == "__main__":
     set_seed(args.seed)
     check_path(args.output_dir)
 
-    # os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
-    # args.cuda_condition = torch.cuda.is_available() and not args.no_cuda
 
     args.data_file = args.data_dir + "train_ratings.csv"
     item2attribute_file = args.data_dir + args.data_name + "_item2attributes.json"
@@ -434,6 +425,8 @@ if __name__ == "__main__":
     train_data = loader.load_data('train')
     vad_data_tr, vad_data_te = loader.load_data('validation')
     test_data_tr, test_data_te = loader.load_data('test')
+
+    # XXX submission data 추가
     submission_data = loader.load_data('submission')
 
     N = train_data.shape[0]
@@ -464,29 +457,26 @@ if __name__ == "__main__":
     update_count = 0
 
 
-    # trainer = FinetuneTrainer(
-    #     model, train_dataloader, eval_dataloader, test_dataloader, None, args
-    # )
 
     # save model args
     args_str = f"{args.model_name}-{args.data_name}"
     args.log_file = os.path.join(args.output_dir, args_str + ".txt")
 
-    # args.item2attribute = item2attribute
-    # # set item score in train set to `0` in validation
-    # args.train_matrix = valid_rating_matrix
-
-
     # save model
-    if args.data_process == 0:
+    # XXX 저장 model 이름 변경
+    # 여러 실험하기 위해 나누습니다
+    if args.data_process == 0:  # 기본값
+        # 모델이름-데이터이름_epoch 수_optimizer.pt
         checkpoint = f"{args_str}_{args.epochs}_{args.optimizer}.pt"
-    else :
+    else : # 최근 데이터 일부만 사용하는 경우
+        # 모델이름-데이터이름_data_최근 데이터 갯수
         checkpoint = f"{args_str}_data_{args.data_process}.pt"
     args.checkpoint_path = os.path.join(args.output_dir, checkpoint)
 
     early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
 
-    # wandb
+    # XXX wandb 설정
+    # 기본 값은 wandb를 사용하지 않습니다.
     if args.wandb:
         wandb.login()
         #wandb.init(group="Multi-VAE", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_{args.epochs}_{args.optimizer}")
@@ -496,8 +486,9 @@ if __name__ == "__main__":
 
     for epoch in range(1, args.epochs + 1):
         epoch_start_time = time.time()
-        train(model, criterion, optimizer, is_VAE=True)
-        val_loss, n100, r10, r20, r50 = evaluate(model, criterion, vad_data_tr, vad_data_te, is_VAE=True)
+        train(model, criterion, optimizer, is_VAE=True) # 훈련
+        val_loss, n100, r10, r20, r50 = evaluate(model, criterion, vad_data_tr, vad_data_te, is_VAE=True) # 검증 데이터 테스트
+        # XXX wnadb 설정
         if args.wandb:
             wandb.log({
                 "val_loss" : val_loss,
@@ -545,4 +536,5 @@ if __name__ == "__main__":
         print(f"load model : {args.checkpoint_path}")
         model = torch.load(f)    
 
+    # XXX submission 평가
     evaluate_submission(model, criterion=loss_function_vae, submission_data=submission_data, is_VAE=True)
