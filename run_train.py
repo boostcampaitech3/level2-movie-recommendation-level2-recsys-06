@@ -364,8 +364,8 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
         result.to_csv(os.path.join(args.output_dir, f'submission_data_random_{args.data_random_process}.csv'), index=False)
         print("export submission : ", os.path.join(args.output_dir, f'submission_data_random_{args.data_random_process}.csv'))
     elif args.train_all == True:
-        result.to_csv(os.path.join(args.output_dir, f'submission_data_all_{args.batch_size}.csv'), index=False)
-        print("export submission : ", os.path.join(args.output_dir, f'submission_data_all_{args.batch_size}.csv'))
+        result.to_csv(os.path.join(args.output_dir, f'submission_data_all_{args.batch_size}_100.csv'), index=False)
+        print("export submission : ", os.path.join(args.output_dir, f'submission_data_all_{args.batch_size}_100.csv'))
     else : # 기본값             
         # submission_epoch 수_optimizer.csv
         result.to_csv(os.path.join(args.output_dir, f'submission_{args.epochs}_{args.optimizer}.csv'), index=False)
@@ -451,7 +451,11 @@ if __name__ == "__main__":
     # Build the model
     ###############################################################################
 
-    p_dims = [200, 600, n_items]
+    #p_dims = [200, 600, n_items]
+    p_dims = [100, n_items]
+    #p_dims = [200, 600, 800, n_items]
+    #p_dims = [400, 800, n_items]
+    #p_dims = [100, 300, 500, 700, n_items]
     model = MultiVAE(p_dims).to(device)
 
     opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: Adam
@@ -485,7 +489,7 @@ if __name__ == "__main__":
         # 모델이름-데이터이름_data_random_비율
         checkpoint = f"{args_str}_data_random_{args.data_random_process}.pt"
     elif args.train_all == True:
-        checkpoint = f"{args_str}_data_random_train_all.pt"
+        checkpoint = f"{args_str}_data_random_train_all_100.pt"
     else : # 기본값
         # 모델이름-데이터이름_epoch 수_optimizer.pt
         checkpoint = f"{args_str}_{args.epochs}_{args.optimizer}.pt"
@@ -546,24 +550,23 @@ if __name__ == "__main__":
                 torch.save(model, f)
             print(f"save model : {args.checkpoint_path}")
 
-    # Load the best saved model.
-    with open(args.checkpoint_path, 'rb') as f:
-        print(f"load model : {args.checkpoint_path}")
-        model = torch.load(f)       
-
-    
-    # Run on test data.
+   
     if args.train_all == False:
+        # Load the best saved model.
+        with open(args.checkpoint_path, 'rb') as f:
+            print(f"load model : {args.checkpoint_path}")
+            model = torch.load(f)       
+        # Run on test data.
         test_loss, n100, r10, r20, r50 = evaluate(model, criterion, test_data_tr, test_data_te, is_VAE=True)
         print('=' * 100)
         print('| End of training | test loss {:4.2f} | n100 {:4.2f} | r10 {:4.2f} | r20 {:4.2f} | '
                 'r50 {:4.2f}'.format(test_loss, n100, r10, r20, r50))
         print('=' * 100)
 
-        # Load the best saved model.
-        with open(args.checkpoint_path, 'rb') as f:
-            print(f"load model : {args.checkpoint_path}")
-            model = torch.load(f)    
+    # Load the best saved model.
+    with open(args.checkpoint_path, 'rb') as f:
+        print(f"load model : {args.checkpoint_path}")
+        model = torch.load(f)    
 
     # XXX submission 평가
     evaluate_submission(model, criterion=loss_function_vae, submission_data=submission_data, is_VAE=True)
