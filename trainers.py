@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import tqdm
 from torch.optim import Adam
+from importlib import import_module
 
 from utils import ndcg_k, recall_at_k
 
@@ -16,6 +17,7 @@ class Trainer:
         test_dataloader,
         submission_dataloader,
         args,
+        optimizer
     ):
 
         self.args = args
@@ -34,12 +36,21 @@ class Trainer:
 
         # self.data_name = self.args.data_name
         betas = (self.args.adam_beta1, self.args.adam_beta2)
-        self.optim = Adam(
-            self.model.parameters(),
+        if args.optimizer == 'Adam':
+            self.optim = Adam(
+                self.model.parameters(),
+                lr=self.args.lr,
+                betas=betas,
+                weight_decay=self.args.weight_decay,
+            )
+        else:
+            opt_module = getattr(import_module("torch.optim"), args.optimizer)
+            self.optim = opt_module(
+            filter(lambda p: p.requires_grad, model.parameters()),
             lr=self.args.lr,
-            betas=betas,
             weight_decay=self.args.weight_decay,
         )
+
 
         print("Total Parameters:", sum([p.nelement() for p in self.model.parameters()]))
         self.criterion = nn.BCELoss()

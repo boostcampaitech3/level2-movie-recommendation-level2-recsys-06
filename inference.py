@@ -67,6 +67,9 @@ def main():
     )
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
 
+    # XXX 추가한 args parse
+    parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer type (default: Adam)') # optimizer 설정
+
     args = parser.parse_args()
 
     set_seed(args.seed)

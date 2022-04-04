@@ -74,6 +74,7 @@ def main():
 
     # XXX 추가한 args parse
     parser.add_argument("--wandb", type=bool, default=False, help="wandb") # wandb 사용 여부
+    parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer type (default: Adam)') # optimizer 설정
 
     args = parser.parse_args()
 
@@ -97,7 +98,7 @@ def main():
     args.attribute_size = attribute_size + 1
 
     # save model args
-    args_str = f"{args.model_name}-{args.data_name}_{args.batch_size}"
+    args_str = f"{args.model_name}-{args.data_name}_{args.batch_size}_{args.optimizer}"
     args.log_file = os.path.join(args.output_dir, args_str + ".txt")
 
     args.item2attribute = item2attribute
@@ -132,7 +133,7 @@ def main():
     #model = FactorizationMachine(args=args)
 
     trainer = FinetuneTrainer(
-        model, train_dataloader, eval_dataloader, test_dataloader, None, args
+        model, train_dataloader, eval_dataloader, test_dataloader, None, args, args.optimizer
     )
 
     if args.using_pretrain:
