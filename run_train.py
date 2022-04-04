@@ -4,7 +4,8 @@ import os
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
-from importlib import import_module
+import wandb
+
 
 from datasets import SASRecDataset
 from models import S3RecModel
@@ -21,8 +22,8 @@ from utils import (
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="S3RecModel", type=str, help="model type") # model 모듈
-    parser.add_argument("--data_dir", default="../data/train/", type=str)
-    parser.add_argument("--output_dir", default="output/", type=str)
+    parser.add_argument("--data_dir", default="/opt/ml/input/data/train/", type=str)
+    parser.add_argument("--output_dir", default="/opt/ml/input/code/output", type=str)
     parser.add_argument("--data_name", default="Ml", type=str)
 
     # model args
@@ -71,6 +72,9 @@ def main():
     parser.add_argument("--using_pretrain", action="store_true")
     parser.add_argument("--using_pretrain_model_name", type=str, default="Pretrain", help="using pretrain name name")
 
+    # XXX 추가한 args parse
+    parser.add_argument("--wandb", type=bool, default=False, help="wandb") # wandb 사용 여부
+
     args = parser.parse_args()
 
     set_seed(args.seed)
@@ -93,7 +97,7 @@ def main():
     args.attribute_size = attribute_size + 1
 
     # save model args
-    args_str = f"{args.model_name}-{args.data_name}"
+    args_str = f"{args.model_name}-{args.data_name}_{args.batch_size}"
     args.log_file = os.path.join(args.output_dir, args_str + ".txt")
 
     args.item2attribute = item2attribute
@@ -122,10 +126,9 @@ def main():
         test_dataset, sampler=test_sampler, batch_size=args.batch_size
     )
 
-    # model 모듈
-    #model = S3RecModel(args=args)
-    model_module = getattr(import_module("model"), args.model)
-    model = model_module(args=args)
+    model = S3RecModel(args=args)
+    # model_module = getattr(import_module("model"), args.model)
+    # model = model_module(args=args)
     #model = FactorizationMachine(args=args)
 
     trainer = FinetuneTrainer(
@@ -143,11 +146,22 @@ def main():
     else:
         print("Not using pretrained model. The Model is same as SASRec")
 
+    if args.wandb:
+        wandb.init(group="S3Rec-batchsize", project="MovieLens", entity="recsys-06", name=f"S3Rec_{args.batch_size}")
+        wandb.config = args
+
     early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
     for epoch in range(args.epochs):
         trainer.train(epoch)
 
         scores, _ = trainer.valid(epoch)
+        if args.wandb:
+            wandb.log({
+                "RECALL@5":scores[0],
+                "NDCG@5":scores[1],
+                "RECALL@10":scores[2],
+                "NDCG@10":scores[3],
+            })
 
         early_stopping(np.array(scores[-1:]), trainer.model)
         if early_stopping.early_stop:
