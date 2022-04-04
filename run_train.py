@@ -406,7 +406,7 @@ if __name__ == "__main__":
     parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer type (default: Adam)') # optimizer 설정
     parser.add_argument('--data_process', type=int, default=0,  help='data process') # 최근 데이터를 얼마나 사용할 것인가
     parser.add_argument('--data_random_process', type=int, default=0,  help='data random process') # 데이터를 어느 비율만큼 랜덤으로 뽑을 것인가
-    parser.add_argument('--train_all', type=bool, default=False,  help='use all training set')
+    parser.add_argument('--train_all', type=bool, default=False,  help='use all training set') # 훈련데이터를 모두 쓸 것인지
     
     args = parser.parse_args()
 
@@ -452,7 +452,7 @@ if __name__ == "__main__":
     ###############################################################################
 
     #p_dims = [200, 600, n_items]
-    p_dims = [100, n_items]
+    p_dims = [100, n_items] # 특성을 몇개로 표현
     #p_dims = [200, 600, 800, n_items]
     #p_dims = [400, 800, n_items]
     #p_dims = [100, 300, 500, 700, n_items]
