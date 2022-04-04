@@ -10,6 +10,7 @@ parser.add_argument("--wandb", type=bool, default=False, help="wandb") # wandb �
 parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer type (default: Adam)') # optimizer 설정
 parser.add_argument('--data_process', type=int, default=0,  help='data process') # 최근 데이터를 얼마나 사용할 것인가
 parser.add_argument('--data_random_process', type=int, default=0,  help='data random process') # 데이터를 어느 비율만큼 랜덤으로 뽑을 것인가
+parser.add_argument('--train_all', type=bool, default=False,  help='use all training set') # 훈련데이터를 모두 쓸 것인지
 ```
 - 모델 이름 방식은 다음과 같습니다.
 ```python
@@ -19,6 +20,8 @@ if args.data_process != 0 : # 최근 데이터 일부만 사용하는 경우
 elif args.data_random_process != 0 : # 최근 데이터 일부만 사용하는 경우
    # 모델이름-데이터이름_data_random_비율
    checkpoint = f"{args_str}_data_random_{args.data_random_process}.pt"
+elif args.train_all == True:
+   checkpoint = f"{args_str}_data_random_train_all_100.pt"
 else : # 기본값
    # 모델이름-데이터이름_epoch 수_optimizer.pt
    checkpoint = f"{args_str}_{args.epochs}_{args.optimizer}.pt"
@@ -50,3 +53,9 @@ else : # 기본값
 - 입력받은 비율로 랜덤으로 뽑아서 훈련, 검증, 테스트셋을 만듭니다.
 - py인 경우 뽑을 비율을 터미널 창에 입력하면 "start"가 뜨면서 처리를 시작합니다
 - ipynp는 MOVIE_COUNT 함수의 값을 원하는 비율로 바꾸시면 됩니다.
+
+## train_data_all_part_processing.ipynb
+- 데이터를 모두 훈련데이터로 변환합니다
+
+## train_data_all_part_processing.ipynp
+- 데이터 중 일부만 훈련데이터로 사용합니다.
