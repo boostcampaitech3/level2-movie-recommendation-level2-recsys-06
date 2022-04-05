@@ -90,7 +90,7 @@ def main():
     args.attribute_size = attribute_size + 1
 
     # save model args
-    args_str = f"{args.model_name}-{args.data_name}"
+    args_str = f"{args.model_name}-{args.data_name}_{args.batch_size}_{args.optimizer}"
 
     print(str(args))
 
@@ -109,7 +109,7 @@ def main():
 
     model = S3RecModel(args=args)
 
-    trainer = FinetuneTrainer(model, None, None, None, submission_dataloader, args)
+    trainer = FinetuneTrainer(model, None, None, None, submission_dataloader, args, args.optimizer)
 
     trainer.load(args.checkpoint_path)
     print(f"Load model from {args.checkpoint_path} for submission!")
