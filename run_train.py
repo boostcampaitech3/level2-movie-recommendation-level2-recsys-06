@@ -136,6 +136,12 @@ def main():
         model, train_dataloader, eval_dataloader, test_dataloader, None, args, args.optimizer
     )
 
+    # trainer = FinetuneTrainer(
+    #     model, train_dataloader, eval_dataloader, test_dataloader, None, args
+    # )
+
+    
+
     if args.using_pretrain:
         pretrained_path = os.path.join(args.output_dir, {args.using_pretrain_model_name}+'.pt')
         try:
@@ -148,7 +154,7 @@ def main():
         print("Not using pretrained model. The Model is same as SASRec")
 
     if args.wandb:
-        wandb.init(group="S3Rec-batchsize", project="MovieLens", entity="recsys-06", name=f"S3Rec_{args.batch_size}")
+        wandb.init(group="S3Rec-optimizer", project="MovieLens", entity="recsys-06", name=f"S3Rec_{args.optimizer}")
         wandb.config = args
 
     early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
