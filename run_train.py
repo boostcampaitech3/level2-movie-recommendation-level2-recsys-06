@@ -2,11 +2,16 @@ import argparse
 import os
 
 import numpy as np
+import pandas as pd
+from tqdm import tqdm
+from collections import defaultdict
 import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader
 
-from datasets import SASRecDataset
-from models import S3RecModel
+from datasets import SeqDataset
+from models import BERT4Rec
 from trainers import FinetuneTrainer
 import wandb
 from utils import (
@@ -17,172 +22,104 @@ from utils import (
     set_seed,
 )
 
-
-def WandB():
-    wandb.init(
-        # 필수
-        project="MovieLens",  # project Name
-        entity="recsys-06",  # Repository 느낌 변경 X
-        name="DEEPFM_epoch20_batch128_test4",  # -> str : ex) "모델_파라티머_파라미터_파라미터", 훈련 정보에 대해 알아보기 쉽게
-        notes="this is test",  # -> str commit의 메시지 처럼 좀 더 상세한 설명 log
-        group="DEEPFM", # 모델 이름으로 합시다.
-        # 추가 요소
-        # tags -> str[] baseline, production등 태그 기능.
-        # save_code -> bool 코드 저장할지 말지 default false
-        # group -> str : 프로젝트내 그룹을 지정하여 개별 실행을 더 큰 실험으로 구성, k-fold교차, 다른 여러 테스트 세트에 대한 모델 훈련 및 평가 가능.
-
-        #  more info
-        # https://docs.wandb.ai/v/ko/library/init
-    )
-
-
-def main():
-    WandB()
-
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("--data_dir", default="../data/train/", type=str)
-    parser.add_argument("--output_dir", default="output/", type=str)
-    parser.add_argument("--data_name", default="Ml", type=str)
-
-    # model args
-    parser.add_argument("--model_name", default="Finetune_full", type=str)
-    parser.add_argument(
-        "--hidden_size", type=int, default=64, help="hidden size of transformer model"
-    )
-    parser.add_argument(
-        "--num_hidden_layers", type=int, default=2, help="number of layers"
-    )
-    parser.add_argument("--num_attention_heads", default=2, type=int)
-    parser.add_argument("--hidden_act", default="gelu", type=str)  # gelu relu
-    parser.add_argument(
-        "--attention_probs_dropout_prob",
-        type=float,
-        default=0.5,
-        help="attention dropout p",
-    )
-    parser.add_argument(
-        "--hidden_dropout_prob", type=float, default=0.5, help="hidden dropout p"
-    )
-    parser.add_argument("--initializer_range", type=float, default=0.02)
-    parser.add_argument("--max_seq_length", default=50, type=int)
-
-    # train args
-    parser.add_argument("--lr", type=float, default=0.001, help="learning rate of adam")
-    parser.add_argument(
-        "--batch_size", type=int, default=256, help="number of batch_size"
-    )
-    parser.add_argument("--epochs", type=int, default=200, help="number of epochs")
-    parser.add_argument("--no_cuda", action="store_true")
-    parser.add_argument("--log_freq", type=int, default=1, help="per epoch print res")
-    parser.add_argument("--seed", default=42, type=int)
-
-    parser.add_argument(
-        "--weight_decay", type=float, default=0.0, help="weight_decay of adam"
-    )
-    parser.add_argument(
-        "--adam_beta1", type=float, default=0.9, help="adam first beta value"
-    )
-    parser.add_argument(
-        "--adam_beta2", type=float, default=0.999, help="adam second beta value"
-    )
-    parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
-
-    parser.add_argument("--using_pretrain", action="store_true")
-
-    args = parser.parse_args()
-    wandb.config.update(args)
-
-    set_seed(args.seed)
-    check_path(args.output_dir)
-
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
-    args.cuda_condition = torch.cuda.is_available() and not args.no_cuda
-
-    args.data_file = args.data_dir + "train_ratings.csv"
-    item2attribute_file = args.data_dir + args.data_name + "_item2attributes.json"
-
-    # process 1 데이터 파일 로드
-    # 각 유저별 마지막 일부(1개) 아이템을 빼서 테스트 데이터를 구성한다.
-    user_seq, max_item, valid_rating_matrix, test_rating_matrix, _ = get_user_seqs(
-        args.data_file
-    )
-
-    item2attribute, attribute_size = get_item2attribute_json(item2attribute_file)
-
-    args.item_size = max_item + 2
-    args.mask_id = max_item + 1
-    args.attribute_size = attribute_size + 1
-
-    # save model args
-    args_str = f"{args.model_name}-{args.data_name}"
-    args.log_file = os.path.join(args.output_dir, args_str + ".txt")
-    print(str(args))
-
-    args.item2attribute = item2attribute
-    # set item score in train set to `0` in validation
-    args.train_matrix = valid_rating_matrix
-
-    # save model
-    checkpoint = args_str + ".pt"
-    args.checkpoint_path = os.path.join(args.output_dir, checkpoint)
-
-    # process 2 데이터 셋 구성
-    # 훈련
-    train_dataset = SASRecDataset(args, user_seq, data_type="train")
-    train_sampler = RandomSampler(train_dataset)  # Batch를 꺼낼때 섞어서 ( 유저만 섞는것, 영화를 섞는것은 아니다.)
-    train_dataloader = DataLoader(
-        train_dataset, sampler=train_sampler, batch_size=args.batch_size
-    )
-    # 평가
-    # eval 과 test는 순차적으로 결과를 내야 되기 때문에 유저들을 순서대로(SequentialSampler) 뽑음
-    eval_dataset = SASRecDataset(args, user_seq, data_type="valid")
-    eval_sampler = SequentialSampler(eval_dataset)  # Batch 꺼낼 때 순차적으로
-    eval_dataloader = DataLoader(
-        eval_dataset, sampler=eval_sampler, batch_size=args.batch_size
-    )
-    # 테스트
-    test_dataset = SASRecDataset(args, user_seq, data_type="test")
-    test_sampler = SequentialSampler(test_dataset)  # 순차적으로
-    test_dataloader = DataLoader(
-        test_dataset, sampler=test_sampler, batch_size=args.batch_size
-    )
-
-    model = S3RecModel(args=args)
-
-    trainer = FinetuneTrainer(
-        model, train_dataloader, eval_dataloader, test_dataloader, None, args
-    )
-
-    print(args.using_pretrain)
-    if args.using_pretrain:
-        pretrained_path = os.path.join(args.output_dir, "Pretrain.pt")
-        try:
-            trainer.load(pretrained_path)
-            print(f"Load Checkpoint From {pretrained_path}!")
-
-        except FileNotFoundError:
-            print(f"{pretrained_path} Not Found! The Model is same as SASRec")
-    else:
-        print("Not using pretrained model. The Model is same as SASRec")
-
-    early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
-    for epoch in range(args.epochs):
-        trainer.train(epoch)
-
-        scores, _ = trainer.valid(epoch)
-
-        early_stopping(np.array(scores[-1:]), trainer.model)
-        if early_stopping.early_stop:
-            print("Early stopping")
-            break
-
-    trainer.args.train_matrix = test_rating_matrix
-    print("---------------Change to test_rating_matrix!-------------------")
-    # load the best model
-    trainer.model.load_state_dict(torch.load(args.checkpoint_path))
-    scores, result_info = trainer.test(0)
-    print(result_info)
+def random_neg(l, r, s):
+    # log에 존재하는 아이템과 겹치지 않도록 sampling
+    t = np.random.randint(l, r)
+    while t in s:
+        t = np.random.randint(l, r)
+    return t
 
 if __name__ == "__main__":
-    main()
+    # model setting
+    max_len = 50
+    hidden_units = 50
+    num_heads = 1
+    num_layers = 2
+    dropout_rate=0.5
+    num_workers = 1
+    device = 'cuda' 
+
+    # training setting
+    lr = 0.001
+    batch_size = 128
+    num_epochs = 100
+    mask_prob = 0.15 # for cloze task
+
+    ############# 중요 #############
+    # data_path는 사용자의 디렉토리에 맞게 설정해야 합니다.
+    data_path = '/opt/ml/input/data/train/train_ratings.csv'
+    df = pd.read_csv(data_path)
+
+    item_ids = df['item'].unique()
+    user_ids = df['user'].unique()
+    num_item, num_user = len(item_ids), len(user_ids)
+    num_batch = num_user // batch_size
+
+    # user, item indexing
+    item2idx = pd.Series(data=np.arange(len(item_ids))+1, index=item_ids) # item re-indexing (1~num_item), num_item+1: mask idx
+    user2idx = pd.Series(data=np.arange(len(user_ids)), index=user_ids) # user re-indexing (0~num_user-1)
+
+    # dataframe indexing
+    df = pd.merge(df, pd.DataFrame({'item': item_ids, 'item_idx': item2idx[item_ids].values}), on='item', how='inner')
+    df = pd.merge(df, pd.DataFrame({'user': user_ids, 'user_idx': user2idx[user_ids].values}), on='user', how='inner')
+    df.sort_values(['user_idx', 'time'], inplace=True)
+    del df['item'], df['user'] 
+
+    # train set, valid set 생성
+    users = defaultdict(list) # defaultdict은 dictionary의 key가 없을때 default 값을 value로 반환
+    user_train = {}
+    user_valid = {}
+    for u, i, t in zip(df['user_idx'], df['item_idx'], df['time']):
+        users[u].append(i)
+
+    for user in users:
+        user_train[user] = users[user][:-1]
+        user_valid[user] = [users[user][-1]]
+
+    print(f'num users: {num_user}, num items: {num_item}')
+
+    model = BERT4Rec(num_user, num_item, hidden_units, num_heads, num_layers, max_len, dropout_rate, device)
+    model.to(device)
+    criterion = nn.CrossEntropyLoss(ignore_index=0) # label이 0인 경우 무시
+    seq_dataset = SeqDataset(user_train, num_user, num_item, max_len, mask_prob)
+    data_loader = DataLoader(seq_dataset, batch_size=batch_size, shuffle=True, pin_memory=True) # TODO4: pytorch의 DataLoader와 seq_dataset을 사용하여 학습 파이프라인을 구현해보세요.
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+
+for epoch in range(1, num_epochs + 1):
+    tbar = tqdm(data_loader)
+    for step, (log_seqs, labels) in enumerate(tbar):
+        logits = model(log_seqs)
+        
+        # size matching
+        logits = logits.view(-1, logits.size(-1))
+        labels = labels.view(-1).to(device)
+        
+        optimizer.zero_grad()
+        loss = criterion(logits, labels)
+        loss.backward()
+        optimizer.step()
+        
+        tbar.set_description(f'Epoch: {epoch:3d}| Step: {step:3d}| Train loss: {loss:.5f}')
+
+    model.eval()
+
+    NDCG = 0.0 # NDCG@10
+    HIT = 0.0 # HIT@10
+
+    num_item_sample = 100
+    num_user_sample = 1000
+    users = np.random.randint(0, num_user, num_user_sample) # 1000개만 sampling 하여 evaluation
+    for u in users:
+        seq = (user_train[u] + [num_item + 1])[-max_len:] # TODO5: 다음 아이템을 예측하기 위한 input token을 추가해주세요.
+        rated = set(user_train[u] + user_valid[u])
+        item_idx = [user_valid[u][0]] + [random_neg(1, num_item + 1, rated) for _ in range(num_item_sample)]
+
+        with torch.no_grad():
+            predictions = - model(np.array([seq]))
+            predictions = predictions[0][-1][item_idx] # sampling
+            rank = predictions.argsort().argsort()[0].item()
+        
+        if rank < 10: # @10
+            NDCG += 1 / np.log2(rank + 2)
+            HIT += 1
+    print(f'NDCG@10: {NDCG/num_user_sample}| HIT@10: {HIT/num_user_sample}')

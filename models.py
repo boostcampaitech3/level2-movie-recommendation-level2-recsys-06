@@ -1,251 +1,115 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
+import math
 
 from modules import Encoder, LayerNorm
 
-# process 7 SAS-Rec
-# 영상보고 그림과 매칭 시켜보기
-# 오피스아워 26분 ~ 34분
-class S3RecModel(nn.Module):
-    def __init__(self, args):
-        super(S3RecModel, self).__init__()
-        self.item_embeddings = nn.Embedding( # process 7-1 item_embedding의 원래 위치 [item_size, hidden_size]
-            args.item_size, args.hidden_size, padding_idx=0
-        )
-        # process 9 Self-supervised Learning with MIM, Pretraining start
-        # process 9-1 Attribute Embedding을 위한 Layer [attribute_size, hidden_state]
-        self.attribute_embeddings = nn.Embedding(
-            args.attribute_size, args.hidden_size, padding_idx=0
-        )
-        self.position_embeddings = nn.Embedding(args.max_seq_length, args.hidden_size)
-        self.item_encoder = Encoder(args) # process 7-2 프랜스포머의 일부 구성요소를 사용한 Encoder
-        self.LayerNorm = LayerNorm(args.hidden_size, eps=1e-12)
-        self.dropout = nn.Dropout(args.hidden_dropout_prob)
-        self.args = args
+class ScaledDotProductAttention(nn.Module):
+    def __init__(self, hidden_units, dropout_rate):
+        super(ScaledDotProductAttention, self).__init__()
+        self.hidden_units = hidden_units
+        self.dropout = nn.Dropout(dropout_rate) # dropout rate
 
-        # add unique dense layer for 4 losses respectively
-        # process 9-2 Self-Supervised Learning을 위한 Layer
-        self.aap_norm = nn.Linear(args.hidden_size, args.hidden_size)
-        self.mip_norm = nn.Linear(args.hidden_size, args.hidden_size)
-        self.map_norm = nn.Linear(args.hidden_size, args.hidden_size)
-        self.sp_norm = nn.Linear(args.hidden_size, args.hidden_size)
-        self.criterion = nn.BCELoss(reduction="none") # BCE를 줄이는 식으로 한다.
-        self.apply(self.init_weights)
+    def forward(self, Q, K, V, mask):
+        attn_score = torch.matmul(Q, K.transpose(2, 3)) / math.sqrt(self.hidden_units)
+        attn_score = attn_score.masked_fill(mask == 0, -1e9)  # 유사도가 0인 지점은 -infinity로 보내 softmax 결과가 0이 되도록 함
+        attn_dist = self.dropout(F.softmax(attn_score, dim=-1))  # attention distribution
+        output = torch.matmul(attn_dist, V)  # dim of output : batchSize x num_head x seqLen x hidden_units
+        return output, attn_dist
 
-    # process 9-3 AAP (Associated Attribute Prediction) [장르]
-    # 영화 Sequence로 부터 속성을 생성하는 과정
-    # 영화의 장르를 이해시키자!
-    def associated_attribute_prediction(self, sequence_output, attribute_embedding):
-        """
-        :param sequence_output: [B L H]
-        :param attribute_embedding: [arribute_num H]
-        :return: scores [B*L tag_num]
-        """
-        sequence_output = self.aap_norm(sequence_output)  # [B L H]
-        sequence_output = sequence_output.view(
-            [-1, self.args.hidden_size, 1]
-        )  # [B*L H 1]
-        # [tag_num H] [B*L H 1] -> [B*L tag_num 1]
-        score = torch.matmul(attribute_embedding, sequence_output)
-        return torch.sigmoid(score.squeeze(-1))  # [B*L tag_num]
+class MultiHeadAttention(nn.Module):
+    def __init__(self, num_heads, hidden_units, dropout_rate):
+        super(MultiHeadAttention, self).__init__()
+        self.num_heads = num_heads # head의 수
+        self.hidden_units = hidden_units
+        
+        # query, key, value, output 생성을 위해 Linear 모델 생성
+        self.W_Q = nn.Linear(hidden_units, hidden_units, bias=False)
+        self.W_K = nn.Linear(hidden_units, hidden_units, bias=False)
+        self.W_V = nn.Linear(hidden_units, hidden_units, bias=False)
+        self.W_O = nn.Linear(hidden_units, hidden_units, bias=False)
 
-    # process 9-4 MIP(Masked Item Prediction) sample neg items
-    # 주변 정보 학습하기
-    # 제대로 예측했는지 여부를 return(Negative Smaple에서는 잘못 예측해야 좋음)
-    def masked_item_prediction(self, sequence_output, target_item):
-        """
-        :param sequence_output: [B L H]
-        :param target_item: [B L H]
-        :return: scores [B*L]
-        """
-        sequence_output = self.mip_norm(
-            sequence_output.view([-1, self.args.hidden_size])
-        )  # [B*L H]
-        target_item = target_item.view([-1, self.args.hidden_size])  # [B*L H]
-        score = torch.mul(sequence_output, target_item)  # [B*L H]
-        return torch.sigmoid(torch.sum(score, -1))  # [B*L]  # 빈 영화를 내보낸다.
+        self.attention = ScaledDotProductAttention(hidden_units, dropout_rate) # scaled dot product attention module을 사용하여 attention 계산
+        self.dropout = nn.Dropout(dropout_rate) # dropout rate
+        self.layerNorm = nn.LayerNorm(hidden_units, 1e-6) # layer normalization
 
-    # process 9-5 MAP (Masked Attribute Prediction)
-    # 중간에 빈 영화가 아닌 그 영화의 장르를 예측해보자!
-    def masked_attribute_prediction(self, sequence_output, attribute_embedding):
-        sequence_output = self.map_norm(sequence_output)  # [B L H]
-        sequence_output = sequence_output.view(
-            [-1, self.args.hidden_size, 1]
-        )  # [B*L H 1]
-        # [tag_num H] [B*L H 1] -> [B*L tag_num 1]
-        score = torch.matmul(attribute_embedding, sequence_output)
-        return torch.sigmoid(score.squeeze(-1))  # [B*L tag_num]
+    def forward(self, enc, mask):
+        residual = enc # residual connection을 위해 residual 부분을 저장
+        batch_size, seqlen = enc.size(0), enc.size(1)
+        
+        # Query, Key, Value를 (num_head)개의 Head로 나누어 각기 다른 Linear projection을 통과시킴
+        Q = self.W_Q(enc).view(batch_size, seqlen, self.num_heads, self.hidden_units) 
+        K = self.W_K(enc).view(batch_size, seqlen, self.num_heads, self.hidden_units)
+        V = self.W_V(enc).view(batch_size, seqlen, self.num_heads, self.hidden_units)
 
-    # process 9-6 SP (Segment Prediction) sample neg segment
-    # 묶음으로 예측을 해보자! 영상(44분) 보고 알기.
-    def segment_prediction(self, context, segment):
-        """
-        :param context: [B H]
-        :param segment: [B H]
-        :return:
-        """
-        context = self.sp_norm(context)
-        score = torch.mul(context, segment)  # [B H]
-        return torch.sigmoid(torch.sum(score, dim=-1))  # [B]
+        # Head별로 각기 다른 attention이 가능하도록 Transpose 후 각각 attention에 통과시킴
+        Q, K, V = Q.transpose(1, 2), K.transpose(1, 2), V.transpose(1, 2)
+        output, attn_dist = self.attention(Q, K, V, mask)
 
-    #
-    def add_position_embedding(self, sequence):
+        # 다시 Transpose한 후 모든 head들의 attention 결과를 합칩니다.
+        output = output.transpose(1, 2).contiguous() 
+        output = output.view(batch_size, seqlen, -1)
 
-        seq_length = sequence.size(1)
-        position_ids = torch.arange(
-            seq_length, dtype=torch.long, device=sequence.device
-        )
-        position_ids = position_ids.unsqueeze(0).expand_as(sequence)
-        item_embeddings = self.item_embeddings(sequence)
-        position_embeddings = self.position_embeddings(position_ids)
-        sequence_emb = item_embeddings + position_embeddings
-        sequence_emb = self.LayerNorm(sequence_emb)
-        sequence_emb = self.dropout(sequence_emb)
+        # Linear Projection, Dropout, Residual sum, and Layer Normalization
+        output = self.layerNorm(self.dropout(self.W_O(output)) + residual)
+        return output, attn_dist
+    
+class PositionwiseFeedForward(nn.Module):
+    def __init__(self, hidden_units, dropout_rate):
+        super(PositionwiseFeedForward, self).__init__()
+        
+        # SASRec과의 dimension 차이가 있습니다.
+        self.W_1 = nn.Linear(hidden_units, 4 * hidden_units) 
+        self.W_2 = nn.Linear(4 * hidden_units, hidden_units)
+        self.dropout = nn.Dropout(dropout_rate)
+        self.layerNorm = nn.LayerNorm(hidden_units, 1e-6) # layer normalization
 
-        return sequence_emb
+    def forward(self, x):
+        residual = x
+        output = self.W_2(F.gelu(self.dropout(self.W_1(x)))) # activation: relu -> gelu
+        output = self.layerNorm(self.dropout(output) + residual)
+        return output
+    
+class BERT4RecBlock(nn.Module):
+    def __init__(self, num_heads, hidden_units, dropout_rate):
+        super(BERT4RecBlock, self).__init__()
+        self.attention = MultiHeadAttention(num_heads, hidden_units, dropout_rate)
+        self.pointwise_feedforward = PositionwiseFeedForward(hidden_units, dropout_rate)
 
-    def pretrain(
-            self,
-            attributes,
-            masked_item_sequence,
-            pos_items,
-            neg_items,
-            masked_segment_sequence,
-            pos_segment,
-            neg_segment,
-    ):
+    def forward(self, input_enc, mask):
+        output_enc, attn_dist = self.attention(input_enc, mask)
+        output_enc = self.pointwise_feedforward(output_enc)
+        return output_enc, attn_dist
 
-        # Encode masked sequence
+class BERT4Rec(nn.Module):
+    def __init__(self, num_user, num_item, hidden_units, num_heads, num_layers, max_len, dropout_rate, device):
+        super(BERT4Rec, self).__init__()
 
-        sequence_emb = self.add_position_embedding(masked_item_sequence)
-        sequence_mask = (masked_item_sequence == 0).float() * -1e8
-        sequence_mask = torch.unsqueeze(torch.unsqueeze(sequence_mask, 1), 1)
+        self.num_user = num_user
+        self.num_item = num_item
+        self.hidden_units = hidden_units
+        self.num_heads = num_heads
+        self.num_layers = num_layers 
+        self.device = device
+        
+        self.item_emb = nn.Embedding(num_item + 2, hidden_units, padding_idx=0) # TODO2: mask와 padding을 고려하여 embedding을 생성해보세요.
+        self.pos_emb = nn.Embedding(max_len, hidden_units) # learnable positional encoding
+        self.dropout = nn.Dropout(dropout_rate)
+        self.emb_layernorm = nn.LayerNorm(hidden_units, eps=1e-6)
+        
+        self.blocks = nn.ModuleList([BERT4RecBlock(num_heads, hidden_units, dropout_rate) for _ in range(num_layers)])
+        self.out = nn.Linear(hidden_units, num_item + 1) # TODO3: 예측을 위한 output layer를 구현해보세요. (num_item 주의)
+        
+    def forward(self, log_seqs):
+        seqs = self.item_emb(torch.LongTensor(log_seqs).to(self.device))
+        positions = np.tile(np.array(range(log_seqs.shape[1])), [log_seqs.shape[0], 1])
+        seqs += self.pos_emb(torch.LongTensor(positions).to(self.device))
+        seqs = self.emb_layernorm(self.dropout(seqs))
 
-        encoded_layers = self.item_encoder(
-            sequence_emb, sequence_mask, output_all_encoded_layers=True
-        )
-        # [B L H]
-        sequence_output = encoded_layers[-1]
-
-        attribute_embeddings = self.attribute_embeddings.weight
-
-        # process 9-3-1 AAP에 관한 Loss 계산
-        aap_score = self.associated_attribute_prediction(
-            sequence_output, attribute_embeddings
-        ) # 장르에 대한 점수
-        aap_loss = self.criterion(
-            aap_score, attributes.view(-1, self.args.attribute_size).float()
-        )
-        # only compute loss at non-masked position
-        aap_mask = (masked_item_sequence != self.args.mask_id).float() * (
-                masked_item_sequence != 0
-        ).float()
-        aap_loss = torch.sum(aap_loss * aap_mask.flatten().unsqueeze(-1))
-
-        # process 9-4-1 MIP의 Loss계산
-        pos_item_embs = self.item_embeddings(pos_items)
-        neg_item_embs = self.item_embeddings(neg_items)
-        pos_score = self.masked_item_prediction(sequence_output, pos_item_embs)
-        neg_score = self.masked_item_prediction(sequence_output, neg_item_embs)
-        mip_distance = torch.sigmoid(pos_score - neg_score) # sigmoid input값이 클수록 올바른 예측이다.
-        mip_loss = self.criterion(
-            mip_distance, torch.ones_like(mip_distance, dtype=torch.float32)
-        )
-        mip_mask = (masked_item_sequence == self.args.mask_id).float()
-        mip_loss = torch.sum(mip_loss * mip_mask.flatten())
-
-        # process 9-5-1 MAP Loss 계산
-        map_score = self.masked_attribute_prediction(
-            sequence_output, attribute_embeddings
-        )
-        map_loss = self.criterion(
-            map_score, attributes.view(-1, self.args.attribute_size).float()
-        )
-        map_mask = (masked_item_sequence == self.args.mask_id).float()
-        map_loss = torch.sum(map_loss * map_mask.flatten().unsqueeze(-1))
-
-        # process 9-6-1 SP Loss 계산.
-        # segment context
-        segment_context = self.add_position_embedding(masked_segment_sequence)
-        segment_mask = (masked_segment_sequence == 0).float() * -1e8
-        segment_mask = torch.unsqueeze(torch.unsqueeze(segment_mask, 1), 1)
-        segment_encoded_layers = self.item_encoder(
-            segment_context, segment_mask, output_all_encoded_layers=True
-        )
-
-        # take the last position hidden as the context
-        segment_context = segment_encoded_layers[-1][:, -1, :]  # [B H]
-        # pos_segment
-        pos_segment_emb = self.add_position_embedding(pos_segment)
-        pos_segment_mask = (pos_segment == 0).float() * -1e8
-        pos_segment_mask = torch.unsqueeze(torch.unsqueeze(pos_segment_mask, 1), 1)
-        pos_segment_encoded_layers = self.item_encoder(
-            pos_segment_emb, pos_segment_mask, output_all_encoded_layers=True
-        )
-        pos_segment_emb = pos_segment_encoded_layers[-1][:, -1, :]
-
-        # neg_segment
-        neg_segment_emb = self.add_position_embedding(neg_segment)
-        neg_segment_mask = (neg_segment == 0).float() * -1e8
-        neg_segment_mask = torch.unsqueeze(torch.unsqueeze(neg_segment_mask, 1), 1)
-        neg_segment_encoded_layers = self.item_encoder(
-            neg_segment_emb, neg_segment_mask, output_all_encoded_layers=True
-        )
-        neg_segment_emb = neg_segment_encoded_layers[-1][:, -1, :]  # [B H]
-
-        pos_segment_score = self.segment_prediction(segment_context, pos_segment_emb)
-        neg_segment_score = self.segment_prediction(segment_context, neg_segment_emb)
-
-        sp_distance = torch.sigmoid(pos_segment_score - neg_segment_score)
-
-        sp_loss = torch.sum(
-            self.criterion(
-                sp_distance, torch.ones_like(sp_distance, dtype=torch.float32)
-            )
-        )
-
-        return aap_loss, mip_loss, map_loss, sp_loss
-
-    # Fine tune
-    # same as SASRec
-    # process 8-2 finetune 함수 내부
-    # 코드가 길지만, 결국에는 Look-ahead mask를 구성하는 과정.
-    def finetune(self, input_ids):
-
-        attention_mask = (input_ids > 0).long()
-        extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)  # torch.int64
-        max_len = attention_mask.size(-1)
-        attn_shape = (1, max_len, max_len)
-        subsequent_mask = torch.triu(torch.ones(attn_shape), diagonal=1)  # torch.uint8
-        subsequent_mask = (subsequent_mask == 0).unsqueeze(1)
-        subsequent_mask = subsequent_mask.long()
-
-        if self.args.cuda_condition:
-            subsequent_mask = subsequent_mask.cuda()
-
-        extended_attention_mask = extended_attention_mask * subsequent_mask
-        extended_attention_mask = extended_attention_mask.to(
-            dtype=next(self.parameters()).dtype
-        )  # fp16 compatibility
-        extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
-
-        sequence_emb = self.add_position_embedding(input_ids)
-
-        item_encoded_layers = self.item_encoder(
-            sequence_emb, extended_attention_mask, output_all_encoded_layers=True
-        )
-
-        sequence_output = item_encoded_layers[-1]
-        return sequence_output  # B x L x H
-
-    def init_weights(self, module):
-        """Initialize the weights."""
-        if isinstance(module, (nn.Linear, nn.Embedding)):
-            # Slightly different from the TF version which uses truncated_normal for initialization
-            # cf https://github.com/pytorch/pytorch/pull/5617
-            module.weight.data.normal_(mean=0.0, std=self.args.initializer_range)
-        elif isinstance(module, LayerNorm):
-            module.bias.data.zero_()
-            module.weight.data.fill_(1.0)
-        if isinstance(module, nn.Linear) and module.bias is not None:
-            module.bias.data.zero_()
+        mask = torch.BoolTensor(log_seqs > 0).unsqueeze(1).repeat(1, log_seqs.shape[1], 1).unsqueeze(1).to(self.device) # mask for zero pad
+        for block in self.blocks:
+            seqs, attn_dist = block(seqs, mask)
+        out = self.out(seqs)
+        return out
