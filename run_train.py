@@ -62,7 +62,7 @@ if __name__ == "__main__":
     # dataframe indexing
     df = pd.merge(df, pd.DataFrame({'item': item_ids, 'item_idx': item2idx[item_ids].values}), on='item', how='inner')
     df = pd.merge(df, pd.DataFrame({'user': user_ids, 'user_idx': user2idx[user_ids].values}), on='user', how='inner')
-    df.sort_values(['user_idx', 'time'], inplace=True)
+    df.sort_values(['user_idx', 'time'], inplace=True) # 시간 순서대로 정렬
     del df['item'], df['user'] 
 
     # train set, valid set 생성
@@ -108,10 +108,17 @@ for epoch in range(1, num_epochs + 1):
 
     num_item_sample = 100
     num_user_sample = 1000
-    users = np.random.randint(0, num_user, num_user_sample) # 1000개만 sampling 하여 evaluation
+    #users = np.random.randint(0, num_user, num_user_sample) # 1000개만 sampling 하여 evaluation
+    users = list(range(num_user))
     for u in users:
+        # 최근 item 50개만 가져옴
         seq = (user_train[u] + [num_item + 1])[-max_len:] # TODO5: 다음 아이템을 예측하기 위한 input token을 추가해주세요.
+        # u == 0(11)일 때
+        # user_train[u] : [0, 1, 2,...., 375]
+        # user_valid[u] [376]
+        # rated = (0, 1, 2,...., 375, 376)
         rated = set(user_train[u] + user_valid[u])
+        # log에 존재하는 아이템과 겹치지 않도록 랜덤으로 sampling
         item_idx = [user_valid[u][0]] + [random_neg(1, num_item + 1, rated) for _ in range(num_item_sample)]
 
         with torch.no_grad():
