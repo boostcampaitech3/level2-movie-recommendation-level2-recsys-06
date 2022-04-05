@@ -17,7 +17,7 @@ class Trainer:
         test_dataloader,
         submission_dataloader,
         args,
-        optimizer
+        opimizer
     ):
 
         self.args = args
@@ -36,6 +36,12 @@ class Trainer:
 
         # self.data_name = self.args.data_name
         betas = (self.args.adam_beta1, self.args.adam_beta2)
+        # self.optim = Adam(
+        #     self.model.parameters(),
+        #     lr=self.args.lr,
+        #     betas=betas,
+        #     weight_decay=self.args.weight_decay,
+        # )
         if args.optimizer == 'Adam':
             self.optim = Adam(
                 self.model.parameters(),
@@ -46,10 +52,10 @@ class Trainer:
         else:
             opt_module = getattr(import_module("torch.optim"), args.optimizer)
             self.optim = opt_module(
-            filter(lambda p: p.requires_grad, model.parameters()),
-            lr=self.args.lr,
-            weight_decay=self.args.weight_decay,
-        )
+                filter(lambda p: p.requires_grad, model.parameters()),
+                lr=self.args.lr,
+                weight_decay=self.args.weight_decay,
+            )
 
 
         print("Total Parameters:", sum([p.nelement() for p in self.model.parameters()]))
@@ -223,6 +229,7 @@ class FinetuneTrainer(Trainer):
         test_dataloader,
         submission_dataloader,
         args,
+        optimizer
     ):
         super(FinetuneTrainer, self).__init__(
             model,
@@ -231,6 +238,7 @@ class FinetuneTrainer(Trainer):
             test_dataloader,
             submission_dataloader,
             args,
+            optimizer
         )
 
     def iteration(self, epoch, dataloader, mode="train"):
