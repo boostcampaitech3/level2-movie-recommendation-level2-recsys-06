@@ -157,6 +157,8 @@ class SASRecDataset(Dataset):
         # answer None
 
         if self.data_type == "train":
+            # input_ids = items[:-1]
+            # target_pos = items[1:]
             input_ids = items[:-3]
             target_pos = items[1:-2]
             answer = [0]  # no use
