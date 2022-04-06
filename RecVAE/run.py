@@ -8,22 +8,23 @@ from copy import deepcopy
 
 from utils import get_data, recall
 from model import VAE
+import argparse
 
 import pandas as pd
 import bottleneck as bn
 
 import wandb
-wandb.init(
-        project="MovieLens", 
-        entity="recsys-06",  
-        name="RecVAE beta 0.4",
-        notes="recall 10",
-        group="RecVAE"
-)
+# wandb.init(
+#         project="MovieLens", 
+#         entity="recsys-06",  
+#         name="RecVAE beta 0.4",
+#         notes="recall 10",
+#         group="RecVAE"
+# )
 
-import argparse
+
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', type=str)
+parser.add_argument('--dataset', default='/opt/ml/input/data/train/RecVAE', type=str)
 parser.add_argument('--hidden-dim', type=int, default=600)
 parser.add_argument('--latent-dim', type=int, default=300)
 parser.add_argument('--batch-size', type=int, default=500)
@@ -179,7 +180,7 @@ for epoch in range(args.n_epochs):
         evaluate(model, train_data, train_data, metrics, 0.01)[0]
     )
 
-    wandb.log({'score': train_scores[-1]})
+    #wandb.log({'score': train_scores[-1]})
     
     if train_scores[-1] > best_recall:
         best_recall = train_scores[-1]
@@ -202,8 +203,8 @@ for epoch in range(args.n_epochs):
 def result(model, data_in, samples_perc_per_epoch=1, batch_size=500):
     model.eval()
     items=[]
-    user = pd.read_csv('../unique_uid.csv', header=None)
-    item = pd.read_csv('../unique_sid.csv', header=None)
+    user = pd.read_csv('/opt/ml/input/data/train/RecVAE/unique_uid.csv', header=None)
+    item = pd.read_csv('/opt/ml/input/data/train/RecVAE/unique_sid.csv', header=None)
     item = item.to_numpy()
     for batch in generate(batch_size=batch_size,
                           device=device,
@@ -229,6 +230,6 @@ def result(model, data_in, samples_perc_per_epoch=1, batch_size=500):
     items = np.array(items).reshape(-1,1)
     result = np.concatenate((users,items),axis=1)
     result = pd.DataFrame(result, columns=['user','item'])
-    result.to_csv('result.csv', index=False)
+    result.to_csv(f'/opt/ml/input/code/output/result_{args.n_epochs}.csv', index=False)
 
-# result(model_best,train_data)
+result(model_best,train_data)
