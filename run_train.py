@@ -8,12 +8,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 import torch.optim as optim
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import DataLoader
 from importlib import import_module
 from scipy import sparse
 
-from models import MultiVAE, loss_function_vae
-from trainers import FinetuneTrainer
+from models import MultiVAE, loss_function_vae, focal_loss
 import bottleneck as bn
 from utils import (
     EarlyStopping,
@@ -195,7 +194,8 @@ def train(model, criterion, optimizer, is_VAE = False):
           optimizer.zero_grad()
           recon_batch, mu, logvar = model(data)
           
-          loss = criterion(recon_batch, data, mu, logvar, anneal)
+          # loss = criterion(recon_batch, data, mu, logvar, anneal)
+          loss = criterion(recon_batch, data)
         else:
           recon_batch = model(data)
           loss = criterion(recon_batch, data)
@@ -250,7 +250,8 @@ def evaluate(model, criterion, data_tr, data_te, is_VAE=False):
                   anneal = args.anneal_cap
 
               recon_batch, mu, logvar = model(data_tensor)
-              loss = criterion(recon_batch, data_tensor, mu, logvar, anneal)
+              #loss = criterion(recon_batch, data_tensor, mu, logvar, anneal)
+              loss = criterion(recon_batch, data)
 
             else :
               recon_batch = model(data_tensor)
@@ -321,7 +322,8 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
                     anneal = args.anneal_cap
 
                 recon_batch, mu, logvar = model(data_tensor)
-                loss = criterion(recon_batch, data_tensor, mu, logvar, anneal)
+                #loss = criterion(recon_batch, data_tensor, mu, logvar, anneal)
+                loss = criterion(recon_batch, data_tensor)
 
             else :
                 recon_batch = model(data_tensor)
@@ -464,7 +466,8 @@ if __name__ == "__main__":
         lr=1e-3,
         #weight_decay=args.wd
     )
-    criterion = loss_function_vae
+    #criterion = loss_function_vae
+    criterion = focal_loss
 
     ###############################################################################
     # Training code
@@ -569,4 +572,4 @@ if __name__ == "__main__":
         model = torch.load(f)    
 
     # XXX submission 평가
-    evaluate_submission(model, criterion=loss_function_vae, submission_data=submission_data, is_VAE=True)
+    evaluate_submission(model, criterion=focal_loss, submission_data=submission_data, is_VAE=True)
