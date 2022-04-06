@@ -30,6 +30,12 @@ def random_neg(l, r, s):
     return t
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--epochs', type=int, default=200,
+                        help='upper epoch limit')
+
+    args = parser.parse_args()                     
+    
     # model setting
     max_len = 50
     hidden_units = 50
@@ -42,11 +48,11 @@ if __name__ == "__main__":
     # training setting
     lr = 0.001
     batch_size = 128
-    num_epochs = 100
     mask_prob = 0.15 # for cloze task
 
     ############# 중요 #############
     # data_path는 사용자의 디렉토리에 맞게 설정해야 합니다.
+    output_dir = '/opt/ml/input/code/output/'
     data_path = '/opt/ml/input/data/train/train_ratings.csv'
     df = pd.read_csv(data_path)
 
@@ -85,21 +91,21 @@ if __name__ == "__main__":
     data_loader = DataLoader(seq_dataset, batch_size=batch_size, shuffle=True, pin_memory=True) # TODO4: pytorch의 DataLoader와 seq_dataset을 사용하여 학습 파이프라인을 구현해보세요.
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-for epoch in range(1, num_epochs + 1):
-    tbar = tqdm(data_loader)
-    for step, (log_seqs, labels) in enumerate(tbar):
-        logits = model(log_seqs)
-        
-        # size matching
-        logits = logits.view(-1, logits.size(-1))
-        labels = labels.view(-1).to(device)
-        
-        optimizer.zero_grad()
-        loss = criterion(logits, labels)
-        loss.backward()
-        optimizer.step()
-        
-        tbar.set_description(f'Epoch: {epoch:3d}| Step: {step:3d}| Train loss: {loss:.5f}')
+    for epoch in range(1, args.epochs + 1):
+        tbar = tqdm(data_loader)
+        for step, (log_seqs, labels) in enumerate(tbar):
+            logits = model(log_seqs)
+            
+            # size matching
+            logits = logits.view(-1, logits.size(-1))
+            labels = labels.view(-1).to(device)
+            
+            optimizer.zero_grad()
+            loss = criterion(logits, labels)
+            loss.backward()
+            optimizer.step()
+            
+            tbar.set_description(f'Epoch: {epoch:3d}| Step: {step:3d}| Train loss: {loss:.5f}')
 
     model.eval()
 
@@ -113,20 +119,57 @@ for epoch in range(1, num_epochs + 1):
     for u in users:
         # 최근 item 50개만 가져옴
         seq = (user_train[u] + [num_item + 1])[-max_len:] # TODO5: 다음 아이템을 예측하기 위한 input token을 추가해주세요.
-        # u == 0(11)일 때
+        # u == 0(user id가 11)일 때
         # user_train[u] : [0, 1, 2,...., 375]
         # user_valid[u] [376]
-        # rated = (0, 1, 2,...., 375, 376)
         rated = set(user_train[u] + user_valid[u])
         # log에 존재하는 아이템과 겹치지 않도록 랜덤으로 sampling
         item_idx = [user_valid[u][0]] + [random_neg(1, num_item + 1, rated) for _ in range(num_item_sample)]
-
         with torch.no_grad():
             predictions = - model(np.array([seq]))
-            predictions = predictions[0][-1][item_idx] # sampling
-            rank = predictions.argsort().argsort()[0].item()
-        
+            predictions = predictions[0][-1][item_idx] # sampling # 안 본 영화의 prediction
+            rank = predictions.argsort().argsort()[0].item() 
+
         if rank < 10: # @10
             NDCG += 1 / np.log2(rank + 2)
             HIT += 1
+
     print(f'NDCG@10: {NDCG/num_user_sample}| HIT@10: {HIT/num_user_sample}')
+
+    print("@@@@@ submission @@@@@")
+    model.eval()
+
+    submission_user = list()
+    submission_item = list()
+    num_item_sample = 100
+    num_user_sample = 1000
+    #users = np.random.randint(0, num_user, num_user_sample) # 1000개만 sampling 하여 evaluation
+    users = list(range(num_user))
+    for u in users:
+        # 최근 item 50개만 가져옴
+        seq = (user_train[u] + [num_item + 1])[-max_len:] # TODO5: 다음 아이템을 예측하기 위한 input token을 추가해주세요.
+        # u == 0(user id가 11)일 때
+        # user_train[u] : [0, 1, 2,...., 375]
+        # user_valid[u] [376]
+        rated = set(user_train[u] + user_valid[u])
+        # log에 존재하는 아이템과 겹치지 않도록 랜덤으로 sampling
+        #item_idx = [user_valid[u][0]] + [random_neg(1, num_item + 1, rated) for _ in range(num_item_sample)]
+        item_idx = [user_valid[u][0]] + [idx for idx in range(1, num_item+1) if idx not in rated]
+        with torch.no_grad():
+            predictions = - model(np.array([seq]))
+            predictions = predictions[0][-1][item_idx] # sampling # 안 본 영화의 prediction
+            #rank = predictions.argsort().argsort()[0].item() 
+            top_items = predictions.argsort()[:10]
+            for i in top_items:
+                submission_item.append(item2idx.keys()[i])
+        submission_user+= [user2idx.keys()[u]]*10
+        
+        # if rank < 10: # @10
+        #     NDCG += 1 / np.log2(rank + 2)
+        #     HIT += 1
+
+    submission_user = np.array(submission_user).reshape(-1, 1)
+    submission_item = np.array(submission_item).reshape(-1, 1)
+    submission = np.hstack((submission_user, submission_item))
+    pd.DataFrame(submission, columns=['user','item']).to_csv(os.path.join(output_dir,f'BERT4Rec_{args.epochs}.csv'), index=False)
+    print(os.path.join(output_dir,f'BERT4Rec_{args.epochs}.csv'))
