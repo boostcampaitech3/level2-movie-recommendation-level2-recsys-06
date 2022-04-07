@@ -31,7 +31,7 @@ def random_neg(l, r, s):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=200,
+    parser.add_argument('--epochs', type=int, default=1,
                         help='upper epoch limit')
 
     args = parser.parse_args()                     
@@ -154,14 +154,14 @@ if __name__ == "__main__":
         rated = set(user_train[u] + user_valid[u])
         # log에 존재하는 아이템과 겹치지 않도록 랜덤으로 sampling
         #item_idx = [user_valid[u][0]] + [random_neg(1, num_item + 1, rated) for _ in range(num_item_sample)]
-        item_idx = [user_valid[u][0]] + [idx for idx in range(1, num_item+1) if idx not in rated]
+        item_idx = [idx for idx in range(1, num_item+1) if idx not in rated]
         with torch.no_grad():
             predictions = - model(np.array([seq]))
             predictions = predictions[0][-1][item_idx] # sampling # 안 본 영화의 prediction
             #rank = predictions.argsort().argsort()[0].item() 
             top_items = predictions.argsort()[:10]
             for i in top_items:
-                submission_item.append(item2idx.keys()[i])
+                submission_item.append(item2idx.keys()[item_idx[i]-1])
         submission_user+= [user2idx.keys()[u]]*10
         
         # if rank < 10: # @10
