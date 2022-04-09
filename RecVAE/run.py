@@ -9,6 +9,7 @@ from copy import deepcopy
 from utils import get_data, recall
 from model import VAE
 import argparse
+from importlib import import_module
 
 import pandas as pd
 import bottleneck as bn
@@ -35,6 +36,8 @@ parser.add_argument('--n-epochs', type=int, default=50)
 parser.add_argument('--n-enc_epochs', type=int, default=3)
 parser.add_argument('--n-dec_epochs', type=int, default=1)
 parser.add_argument('--not-alternating', type=bool, default=False)
+parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer type (default: Adam)') # optimizer 설정
+parser.add_argument('--wd', type=float, default=0.00,) # optimizer 설정
 args = parser.parse_args()
 
 seed = 1337
@@ -163,8 +166,24 @@ learning_kwargs = {
 decoder_params = set(model.decoder.parameters())
 encoder_params = set(model.encoder.parameters())
 
-optimizer_encoder = optim.Adam(encoder_params, lr=args.lr)
-optimizer_decoder = optim.Adam(decoder_params, lr=args.lr)
+opt_encoder_module = getattr(import_module("torch.optim"), args.optimizer)  # default: Adam
+opt_decoder_module = getattr(import_module("torch.optim"), args.optimizer)  # default: Adam
+optimizer_encoder = opt_encoder_module(
+        encoder_params,
+        lr=args.lr,
+        weight_decay=args.wd
+    )
+
+optimizer_decoder = opt_decoder_module(
+        decoder_params,
+        lr=args.lr,
+        weight_decay=args.wd
+    )
+
+#optimizer_encoder = optim.Adam(encoder_params, lr=args.lr)
+#optimizer_decoder = optim.Adam(decoder_params, lr=args.lr)
+
+
 
 
 for epoch in range(args.n_epochs):
@@ -230,6 +249,6 @@ def result(model, data_in, samples_perc_per_epoch=1, batch_size=500):
     items = np.array(items).reshape(-1,1)
     result = np.concatenate((users,items),axis=1)
     result = pd.DataFrame(result, columns=['user','item'])
-    result.to_csv(f'/opt/ml/input/code/output/result_{args.n_epochs}.csv', index=False)
+    result.to_csv(f'/opt/ml/input/code/output/RecVAE_{args.optimizer}_{args.hidden_dim}.csv', index=False)
 
 result(model_best,train_data)
