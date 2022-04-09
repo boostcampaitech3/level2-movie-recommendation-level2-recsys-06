@@ -30,25 +30,27 @@ def random_neg(l, r, s):
     return t
 
 if __name__ == "__main__":
+    print("start!")
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=1,
-                        help='upper epoch limit')
+    parser.add_argument('--epochs', type=int, default=100, help='upper epoch limit')
+    parser.add_argument('--mask_prob', type=float, default=0.15)
+    parser.add_argument('--max_len', type=int, default=50)
+    parser.add_argument('--num_layers', type=int, default=2)
+    parser.add_argument('--num_heads', type=int, default=1)
+    parser.add_argument('--hidden_units', type=int, default=50)
+    parser.add_argument('--dropout_rate', type=float, default=0.5)
+    parser.add_argument('--num_workers', type=float, default=1)
+    parser.add_argument('--batch_size', type=int, default=128)
 
     args = parser.parse_args()                     
     
     # model setting
-    max_len = 50
-    hidden_units = 50
-    num_heads = 1
-    num_layers = 2
-    dropout_rate=0.5
-    num_workers = 1
     device = 'cuda' 
 
     # training setting
     lr = 0.001
-    batch_size = 128
-    mask_prob = 0.15 # for cloze task
+    #mask_prob = 0.2 # for cloze task
 
     ############# 중요 #############
     # data_path는 사용자의 디렉토리에 맞게 설정해야 합니다.
@@ -59,7 +61,7 @@ if __name__ == "__main__":
     item_ids = df['item'].unique()
     user_ids = df['user'].unique()
     num_item, num_user = len(item_ids), len(user_ids)
-    num_batch = num_user // batch_size
+    num_batch = num_user // args.batch_size
 
     # user, item indexing
     item2idx = pd.Series(data=np.arange(len(item_ids))+1, index=item_ids) # item re-indexing (1~num_item), num_item+1: mask idx
@@ -84,12 +86,16 @@ if __name__ == "__main__":
 
     print(f'num users: {num_user}, num items: {num_item}')
 
-    model = BERT4Rec(num_user, num_item, hidden_units, num_heads, num_layers, max_len, dropout_rate, device)
+    model = BERT4Rec(num_user, num_item, args.hidden_units, args.num_heads, args.num_layers, args.max_len, args.dropout_rate, device)
     model.to(device)
     criterion = nn.CrossEntropyLoss(ignore_index=0) # label이 0인 경우 무시
-    seq_dataset = SeqDataset(user_train, num_user, num_item, max_len, mask_prob)
-    data_loader = DataLoader(seq_dataset, batch_size=batch_size, shuffle=True, pin_memory=True) # TODO4: pytorch의 DataLoader와 seq_dataset을 사용하여 학습 파이프라인을 구현해보세요.
+    seq_dataset = SeqDataset(user_train, num_user, num_item, args.max_len, args.mask_prob)
+    data_loader = DataLoader(seq_dataset, batch_size=args.batch_size, shuffle=True, pin_memory=True) # TODO4: pytorch의 DataLoader와 seq_dataset을 사용하여 학습 파이프라인을 구현해보세요.
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+
+    # wandb.login()
+    # wandb.init(group="BERT4Rec numlayers", project="MovieLens", entity="recsys-06", name=f"BERT4Rec_{args.num_layers}")
+    # wandb.config = args
 
     for epoch in range(1, args.epochs + 1):
         tbar = tqdm(data_loader)
@@ -118,7 +124,7 @@ if __name__ == "__main__":
     users = list(range(num_user))
     for u in users:
         # 최근 item 50개만 가져옴
-        seq = (user_train[u] + [num_item + 1])[-max_len:] # TODO5: 다음 아이템을 예측하기 위한 input token을 추가해주세요.
+        seq = (user_train[u] + [num_item + 1])[-args.max_len:] # TODO5: 다음 아이템을 예측하기 위한 input token을 추가해주세요.
         # u == 0(user id가 11)일 때
         # user_train[u] : [0, 1, 2,...., 375]
         # user_valid[u] [376]
@@ -134,6 +140,11 @@ if __name__ == "__main__":
             NDCG += 1 / np.log2(rank + 2)
             HIT += 1
 
+    # wandb.log({
+    #     'NDCG@10': NDCG/num_user_sample,
+    #     'HIT@10' : HIT/num_user_sample
+    # })
+
     print(f'NDCG@10: {NDCG/num_user_sample}| HIT@10: {HIT/num_user_sample}')
 
     print("@@@@@ submission @@@@@")
@@ -147,8 +158,9 @@ if __name__ == "__main__":
     users = list(range(num_user))
     for u in users:
         # 최근 item 50개만 가져옴
-        seq = (user_train[u] + [num_item + 1])[-max_len:] # TODO5: 다음 아이템을 예측하기 위한 input token을 추가해주세요.
-        # u == 0(user id가 11)일 때
+        # 다음 아이템을 예측하기 위한 input token을 추가해주세요.
+        seq = (user_train[u] + [num_item + 1])
+        if len(seq) > args.max_len : seq = seq[-args.max_len:]
         # user_train[u] : [0, 1, 2,...., 375]
         # user_valid[u] [376]
         rated = set(user_train[u] + user_valid[u])
@@ -171,5 +183,5 @@ if __name__ == "__main__":
     submission_user = np.array(submission_user).reshape(-1, 1)
     submission_item = np.array(submission_item).reshape(-1, 1)
     submission = np.hstack((submission_user, submission_item))
-    pd.DataFrame(submission, columns=['user','item']).to_csv(os.path.join(output_dir,f'BERT4Rec_{args.epochs}.csv'), index=False)
-    print(os.path.join(output_dir,f'BERT4Rec_{args.epochs}.csv'))
+    pd.DataFrame(submission, columns=['user','item']).to_csv(os.path.join(output_dir,f'BERT4Rec_batchsize_{args.batch_size}.csv'), index=False)
+    print(os.path.join(output_dir,f'BERT4Rec_batchsize_{args.batch_size}.csv'))
