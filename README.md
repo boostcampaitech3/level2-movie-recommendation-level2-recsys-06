@@ -1,31 +1,23 @@
-# Movie Recommendation Baseline Code
+# Movie Recommendation EASE Model Code
+Embarrassingly Shallow Autoencoders for Sparse Data
 
-영화 추천 대회를 위한 베이스라인 코드입니다. 다음 코드를 대회에 맞게 재구성 했습니다.
+model paper : https://arxiv.org/pdf/1905.03375v1.pdf
 
-- 코드 출처: https://github.com/aHuiWang/CIKM2020-S3Rec
+paperwithcode : https://paperswithcode.com/paper/190503375
+
+refer to github : https://github.com/Darel13712/ease_rec
 
 ## Installation
-
 ```
 pip install -r requirements.txt
 ```
 
-## How to run
+## run
+1. Run and make csv file
+```
+python run_ease.py \
+--data "data_path" --output_dir "output_path" \
+----output_file_name "output_file_name" --labmda_ "lambda"
+```
 
-1. Pretraining
-   ```
-   python run_pretrain.py
-   ```
-2. Fine Tuning (Main Training)
-   1. with pretrained weight
-      ```
-      python run_train.py --using_pretrain
-      ```
-   2. without pretrained weight
-      ```
-      python run_train.py
-      ```
-3. Inference
-   ```
-   python inference.py
-   ```
+
