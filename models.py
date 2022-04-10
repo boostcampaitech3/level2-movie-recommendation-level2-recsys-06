@@ -4,7 +4,6 @@ import pandas as pd
 from scipy.sparse import csr_matrix
 from sklearn.preprocessing import LabelEncoder
 from tqdm import tqdm
-import wandb
 
 class EASE:
     def __init__(self):
@@ -71,6 +70,7 @@ class EASE:
         print("finish predict")
         return df
 
+# using year
 class EASE2:
     def __init__(self, train):
         self.user_enc = LabelEncoder()

@@ -31,7 +31,7 @@ def main():
     args = parser.parse_args()
     # wandb.config.update(args)
 
-    '''
+    ''' no year
     train_df = pd.read_csv(args.data)
     ease = EASE()
     users = train_df["user"].unique()
