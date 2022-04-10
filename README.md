@@ -1,11 +1,15 @@
 # Movie Recommendation EASE Model Code
 Embarrassingly Shallow Autoencoders for Sparse Data
 
+This model is cool because it is a closed-form solution.
+
+Similiarity matrix is calculated on CPU with numpy.
+
 model paper : https://arxiv.org/pdf/1905.03375v1.pdf
 
 paperwithcode : https://paperswithcode.com/paper/190503375
 
-refer to github : https://github.com/Darel13712/ease_rec
+referred github : https://github.com/Darel13712/ease_rec
 
 ## Installation
 ```
@@ -20,4 +24,11 @@ python run_ease.py \
 ----output_file_name "output_file_name" --labmda_ "lambda"
 ```
 
+## Input & output
+### Input
+```csv file``` with columns ```user_id``` and ```item_id``` both for fit and predict.
 
+It may also use ```ratings``` from column rating if ```implicit``` parameter is set to ```False```.
+
+### Output
+```csv file``` with columns user_id, item_id
