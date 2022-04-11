@@ -10,10 +10,11 @@ import pandas as pd
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', type=str)
-parser.add_argument('--output_dir', type=str)
+parser.add_argument('--dataset', default="/opt/ml/input/data/train/train_ratings.csv", type=str)
+parser.add_argument('--output_dir', default="/opt/ml/input/data/train/RecVAE/", type=str)
 parser.add_argument('--min_users_per_item', type=int, default=0)
-parser.add_argument('--heldout_users', type=int)
+parser.add_argument('--heldout_users', default=0, type=int)
+parser.add_argument('--test', default=False, type=bool)
 
 args = parser.parse_args()
 
