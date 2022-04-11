@@ -10,11 +10,10 @@ import pandas as pd
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', default="/opt/ml/input/data/train/train_ratings.csv", type=str)
-parser.add_argument('--output_dir', default="/opt/ml/input/data/train/RecVAE/", type=str)
+parser.add_argument('--dataset', type=str)
+parser.add_argument('--output_dir', type=str)
 parser.add_argument('--min_users_per_item', type=int, default=0)
-parser.add_argument('--heldout_users', default=0, type=int)
-parser.add_argument('--test', default=False, type=bool)
+parser.add_argument('--heldout_users', type=int)
 
 args = parser.parse_args()
 
@@ -49,7 +48,7 @@ if not os.path.exists(output_dir):
 with open(os.path.join(output_dir, 'unique_sid.txt'), 'w') as f:
     for sid in unique_sid:
         f.write('%s\n' % sid)
-        
+
 with open(os.path.join(output_dir, 'unique_uid.txt'), 'w') as f:
     for uid in unique_uid:
         f.write('%s\n' % uid)
@@ -77,7 +76,7 @@ def split_train_test_proportion(data, test_prop=0.2):
 
     data_tr = pd.concat(tr_list)
     data_te = pd.concat(te_list)
-    
+
     return data_tr, data_te
 
 
@@ -99,4 +98,4 @@ train_data.to_csv(os.path.join(output_dir, 'train.csv'), index=False)
 # test_data_tr.to_csv(os.path.join(output_dir, 'test_tr.csv'), index=False)
 
 # test_data_te = numerize(test_plays_te)
-# test_data_te.to_csv(os.path.join(output_dir, 'test_te.csv'), index=False)
+# test_data_te.to_csv(os.path.join(output_dir, 'test_te.csv'), index=False) 
