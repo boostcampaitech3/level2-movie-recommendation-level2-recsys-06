@@ -3,8 +3,6 @@ import os
 import time
 import numpy as np
 import pandas as pd
-import random
-from pyrsistent import v
 
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,11 +11,8 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from importlib import import_module
 from scipy import sparse
-from utils import get_data, recall
-from copy import deepcopy
-from importlib import import_module
 
-from models import MultiVAE, loss_function_vae, VAE
+from models import MultiVAE, loss_function_vae
 from trainers import FinetuneTrainer
 import bottleneck as bn
 from utils import (
@@ -41,11 +36,11 @@ class DataLoader():
 
         # 데이터를 불러올 폴더 지정
 
-        if MultiVAE_args.data_process != 0:# 최근 데이터만 사용하는 경우
-            self.pro_dir = os.path.join(path, f'pro_sg_{MultiVAE_args.data_process}')
-        elif MultiVAE_args.data_random_process != 0:# 일정한 비율로 랜덤으로 데이터를 사용하는 경우
-            self.pro_dir = os.path.join(path, f'pro_sg_random_{MultiVAE_args.data_random_process}')
-        elif MultiVAE_args.train_all == True:
+        if args.data_process != 0:# 최근 데이터만 사용하는 경우
+            self.pro_dir = os.path.join(path, f'pro_sg_{args.data_process}')
+        elif args.data_random_process != 0:# 일정한 비율로 랜덤으로 데이터를 사용하는 경우
+            self.pro_dir = os.path.join(path, f'pro_sg_random_{args.data_random_process}')
+        elif args.train_all == True:
             self.pro_dir = os.path.join(path, 'pro_sg_all')
         else: # 기본값
             self.pro_dir = os.path.join(path, 'pro_sg')
@@ -184,18 +179,18 @@ def train(model, criterion, optimizer, is_VAE = False):
 
     np.random.shuffle(idxlist)
     
-    for batch_idx, start_idx in enumerate(range(0, N, MultiVAE_args.batch_size)):
-        end_idx = min(start_idx + MultiVAE_args.batch_size, N)
+    for batch_idx, start_idx in enumerate(range(0, N, args.batch_size)):
+        end_idx = min(start_idx + args.batch_size, N)
         data = train_data[idxlist[start_idx:end_idx]]
         data = naive_sparse2tensor(data).to(device)
         optimizer.zero_grad()
 
         if is_VAE:
-          if MultiVAE_args.total_anneal_steps > 0:
-            anneal = min(MultiVAE_args.anneal_cap, 
-                            1. * update_count / MultiVAE_args.total_anneal_steps)
+          if args.total_anneal_steps > 0:
+            anneal = min(args.anneal_cap, 
+                            1. * update_count / args.total_anneal_steps)
           else:
-              anneal = MultiVAE_args.anneal_cap
+              anneal = args.anneal_cap
 
           optimizer.zero_grad()
           recon_batch, mu, logvar = model(data)
@@ -211,13 +206,13 @@ def train(model, criterion, optimizer, is_VAE = False):
 
         update_count += 1
 
-        if batch_idx % MultiVAE_args.log_interval == 0 and batch_idx > 0:
+        if batch_idx % args.log_interval == 0 and batch_idx > 0:
             elapsed = time.time() - start_time
             print('| epoch {:3d} | {:4d}/{:4d} batches | ms/batch {:4.2f} | '
                     'loss {:4.2f}'.format(
-                        epoch, batch_idx, len(range(0, N, MultiVAE_args.batch_size)),
-                        elapsed * 1000 / MultiVAE_args.log_interval,
-                        train_loss / MultiVAE_args.log_interval))
+                        epoch, batch_idx, len(range(0, N, args.batch_size)),
+                        elapsed * 1000 / args.log_interval,
+                        train_loss / args.log_interval))
             
 
             start_time = time.time()
@@ -239,20 +234,20 @@ def evaluate(model, criterion, data_tr, data_te, is_VAE=False):
 
     
     with torch.no_grad():
-        for start_idx in range(0, e_N, MultiVAE_args.batch_size):
-            end_idx = min(start_idx + MultiVAE_args.batch_size, N)
+        for start_idx in range(0, e_N, args.batch_size):
+            end_idx = min(start_idx + args.batch_size, N)
             data = data_tr[e_idxlist[start_idx:end_idx]]
             heldout_data = data_te[e_idxlist[start_idx:end_idx]]
 
-            device = torch.device("cuda" if MultiVAE_args.cuda else "cpu")
+            device = torch.device("cuda" if args.cuda else "cpu")
             data_tensor = naive_sparse2tensor(data).to(device)
             if is_VAE :
               
-              if MultiVAE_args.total_anneal_steps > 0:
-                  anneal = min(MultiVAE_args.anneal_cap, 
-                                1. * update_count / MultiVAE_args.total_anneal_steps)
+              if args.total_anneal_steps > 0:
+                  anneal = min(args.anneal_cap, 
+                                1. * update_count / args.total_anneal_steps)
               else:
-                  anneal = MultiVAE_args.anneal_cap
+                  anneal = args.anneal_cap
 
               recon_batch, mu, logvar = model(data_tensor)
               loss = criterion(recon_batch, data_tensor, mu, logvar, anneal)
@@ -278,7 +273,7 @@ def evaluate(model, criterion, data_tr, data_te, is_VAE=False):
             r20_list.append(r20)
             r50_list.append(r50)
 
-    total_loss /= len(range(0, e_N, MultiVAE_args.batch_size))
+    total_loss /= len(range(0, e_N, args.batch_size))
     n100_list = np.concatenate(n100_list)
     r20_list = np.concatenate(r20_list)
     r50_list = np.concatenate(r50_list)
@@ -291,7 +286,7 @@ def evaluate(model, criterion, data_tr, data_te, is_VAE=False):
 # evaluation 함수와 비슷합니다.
 def evaluate_submission(model, criterion, submission_data, is_VAE=False):
     # Turn on evaluation mode
-    recon_batch_result = list()
+
     model.eval()
     total_loss = 0.0
     global update_count
@@ -309,21 +304,21 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
     submission_item = list()
     
     with torch.no_grad():
-        for start_idx in range(0, e_N, MultiVAE_args.batch_size):
-            end_idx = min(start_idx + MultiVAE_args.batch_size, s_N)
+        for start_idx in range(0, e_N, args.batch_size):
+            end_idx = min(start_idx + args.batch_size, s_N)
             data = submission_data[e_idxlist[start_idx:end_idx]]
             # true 값은 모르므로 heldout_data는 주석처리
             # heldout_data = data_te[e_idxlist[start_idx:end_idx]] 
 
-            device = torch.device("cuda" if MultiVAE_args.cuda else "cpu")
+            device = torch.device("cuda" if args.cuda else "cpu")
             data_tensor = naive_sparse2tensor(data).to(device)
             if is_VAE :
               
-                if MultiVAE_args.total_anneal_steps > 0:
-                     anneal = min(MultiVAE_args.anneal_cap, 
-                                1. * update_count / MultiVAE_args.total_anneal_steps)
+                if args.total_anneal_steps > 0:
+                     anneal = min(args.anneal_cap, 
+                                1. * update_count / args.total_anneal_steps)
                 else:
-                    anneal = MultiVAE_args.anneal_cap
+                    anneal = args.anneal_cap
 
                 recon_batch, mu, logvar = model(data_tensor)
                 loss = criterion(recon_batch, data_tensor, mu, logvar, anneal)
@@ -338,219 +333,110 @@ def evaluate_submission(model, criterion, submission_data, is_VAE=False):
             # Exclude examples from training set
             recon_batch = recon_batch.cpu().numpy()
             recon_batch[data.nonzero()] = -np.inf
-            #recon_batch_result.append(recon_batch)
-            recon_batch_result.extend(recon_batch)
             
+            # XXX submission 결과
+            # 데이터 전처리 과정에서 show2id
+            # 따라서 결과를 뽑을 때는 다시 id2show해야함
+            # show2id는 원본 데이터 순서로 dict형태 (show(원본 영화 id), id(0번부터))
+            # 따라서 show2id id번째의 key값이 원래 영화 id
+            for i in range(len(recon_batch)):
+                idxes = bn.argpartition(-recon_batch[i], 10)[:10] # 유저에게 추천할 10개 영화를 가져옴
+                tmp = list()
+                # id2show 과정
+                for j in idxes:                    
+                    tmp.append(list(show2id.keys())[j]) # id2show # = tmp.append(raw_data['item'].unique()[j])
+                submission_item.append(tmp)
 
-    return np.array(recon_batch_result)
+    submission_item = np.array(submission_item).reshape(-1, 1)
+    submission_user = raw_data['user'].unique().repeat(10)
+    submission_user = np.array(submission_user).reshape(-1, 1)
 
+    result = np.hstack((submission_user,submission_item))
 
-def generate(batch_size, device, data_in, data_out=None, shuffle=False, samples_perc_per_epoch=1):
-    assert 0 < samples_perc_per_epoch <= 1
-
-    total_samples = data_in.shape[0]
-    samples_per_epoch = int(total_samples * samples_perc_per_epoch)
-
-    if shuffle:
-        idxlist = np.arange(total_samples)
-        np.random.shuffle(idxlist)
-        idxlist = idxlist[:samples_per_epoch]
-    else:
-        idxlist = np.arange(samples_per_epoch)
-
-    for st_idx in range(0, samples_per_epoch, batch_size):
-        end_idx = min(st_idx + batch_size, samples_per_epoch)
-        idx = idxlist[st_idx:end_idx]
-
-        yield Batch(device, idx, data_in, data_out)
-
-
-class Batch:
-    def __init__(self, device, idx, data_in, data_out=None):
-        self._device = device
-        self._idx = idx
-        self._data_in = data_in
-        self._data_out = data_out
-
-    def get_idx(self):
-        return self._idx
-
-    def get_idx_to_dev(self):
-        return torch.LongTensor(self.get_idx()).to(self._device)
-
-    def get_ratings(self, is_out=False):
-        data = self._data_out if is_out else self._data_in
-        return data[self._idx]
-
-    def get_ratings_to_dev(self, is_out=False):
-        return torch.Tensor(
-            self.get_ratings(is_out).toarray()
-        ).to(self._device)
-
-
-def evaluate(model, data_in, data_out, metrics, samples_perc_per_epoch=1, batch_size=500):
-    metrics = deepcopy(metrics)
-    model.eval()
-
-    for m in metrics:
-        m['score'] = []
-
-    for batch in generate(batch_size=batch_size,
-                          device=device,
-                          data_in=data_in,
-                          data_out=data_out,
-                          samples_perc_per_epoch=samples_perc_per_epoch
-                         ):
-
-        ratings_in = batch.get_ratings_to_dev()
-        ratings_out = batch.get_ratings(is_out=True)
-
-        ratings_pred = model(ratings_in, calculate_loss=False).cpu().detach().numpy()
-
-        if not (data_in is data_out):
-            ratings_pred[batch.get_ratings().nonzero()] = -np.inf
-
-        for m in metrics:
-            m['score'].append(m['metric'](ratings_pred, ratings_out, k=m['k']))
-
-    for m in metrics:
-        m['score'] = np.concatenate(m['score']).mean()
-
-    return [x['score'] for x in metrics]
-
-
-def run(model, opts, train_data, batch_size, n_epochs, beta, gamma, dropout_rate):
-    model.train()
-    for epoch in range(n_epochs):
-        for batch in generate(batch_size=batch_size, device=device, data_in=train_data, shuffle=False):
-            ratings = batch.get_ratings_to_dev()
-
-            for optimizer in opts:
-                optimizer.zero_grad()
-
-            _, loss = model(ratings, beta=beta, gamma=gamma, dropout_rate=dropout_rate)
-            loss.backward()
-
-            for optimizer in opts:
-                optimizer.step()
-
-def result(model, data_in, samples_perc_per_epoch=1, batch_size=500):
-    recon_batch_result = list()
-    model.eval()
-    items=[]
-    user = pd.read_csv('/opt/ml/input/data/train/RecVAE/unique_uid.csv', header=None)
-    item = pd.read_csv('/opt/ml/input/data/train/RecVAE/unique_sid.csv', header=None)
-    item = item.to_numpy()
-    for batch in generate(batch_size=batch_size,
-                          device=device,
-                          data_in=data_in,
-                          samples_perc_per_epoch=samples_perc_per_epoch
-                         ):
-        
-        ratings_in = batch.get_ratings_to_dev()
+    result = pd.DataFrame(result, columns=['user','item'])
     
-        ratings_pred = model(ratings_in, calculate_loss=False).cpu().detach().numpy()
-        
-        ratings_pred[batch.get_ratings().nonzero()] = -np.inf
-        recon_batch_result.extend(ratings_pred)
-
-    return np.array(recon_batch_result)
+    # XXX submission export 
+    if args.data_process != 0: # 최근 데이터 일부만 사용한 경우
+        # submission_data_최근 데이터 갯수.csv
+        result.to_csv(os.path.join(args.output_dir, f'submission_data_{args.data_process}.csv'), index=False)
+        print("export submission : ", os.path.join(args.output_dir, f'submission_data_{args.data_process}.csv'))
+    elif args.data_random_process != 0:
+        result.to_csv(os.path.join(args.output_dir, f'submission_data_random_{args.data_random_process}.csv'), index=False)
+        print("export submission : ", os.path.join(args.output_dir, f'submission_data_random_{args.data_random_process}.csv'))
+    elif args.train_all == True:
+        result.to_csv(os.path.join(args.output_dir, f'submission_data_all_{args.batch_size}_100.csv'), index=False)
+        print("export submission : ", os.path.join(args.output_dir, f'submission_data_all_{args.batch_size}_100.csv'))
+    else : # 기본값             
+        # submission_epoch 수_optimizer.csv
+        result.to_csv(os.path.join(args.output_dir, f'submission_{args.epochs}_{args.optimizer}.csv'), index=False)
+        print("export submission : ", os.path.join(args.output_dir, f'submission_{args.epochs}_{args.optimizer}.csv'))
 
 if __name__ == "__main__":
-    MultiVAE_parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser()
     # parser.add_argument("--model", default="S3RecModel", type=str, help="model type") # model 모듈
-    MultiVAE_parser.add_argument("--model_name", default="MultiVAE", type=str)
-    MultiVAE_parser.add_argument("--data_dir", default="/opt/ml/input/data/train/", type=str)
-    MultiVAE_parser.add_argument("--data_name", default="Ml", type=str)
-    MultiVAE_parser.add_argument("--output_dir", default="/opt/ml/input/code/output/", type=str)
-    MultiVAE_parser.add_argument('--lr', type=float, default=1e-4,
+    parser.add_argument("--model_name", default="MultiVAE", type=str)
+    parser.add_argument("--data_dir", default="/opt/ml/input/data/train/", type=str)
+    parser.add_argument("--data_name", default="Ml", type=str)
+    parser.add_argument("--output_dir", default="/opt/ml/input/code/output/", type=str)
+    parser.add_argument('--lr', type=float, default=1e-4,
                     help='initial learning rate')
-    MultiVAE_parser.add_argument('--wd', type=float, default=0.00,
+    parser.add_argument('--wd', type=float, default=0.00,
                         help='weight decay coefficient')
-    MultiVAE_parser.add_argument('--batch_size', type=int, default=32,
+    parser.add_argument('--batch_size', type=int, default=500,
                         help='batch size')
-    MultiVAE_parser.add_argument('--epochs', type=int, default=1,
+    parser.add_argument('--epochs', type=int, default=20,
                         help='upper epoch limit')
-    MultiVAE_parser.add_argument('--total_anneal_steps', type=int, default=200000,
+    parser.add_argument('--total_anneal_steps', type=int, default=200000,
                         help='the total number of gradient updates for annealing')
-    MultiVAE_parser.add_argument('--anneal_cap', type=float, default=0.2,
+    parser.add_argument('--anneal_cap', type=float, default=0.2,
                         help='largest annealing parameter')
-    MultiVAE_parser.add_argument('--seed', type=int, default=960708,
+    parser.add_argument('--seed', type=int, default=1111,
                         help='random seed')
-    MultiVAE_parser.add_argument('--cuda', action='store_true',
+    parser.add_argument('--cuda', action='store_true',
                         help='use CUDA')
-    MultiVAE_parser.add_argument('--log_interval', type=int, default=100, metavar='N',
+    parser.add_argument('--log_interval', type=int, default=100, metavar='N',
                         help='report interval')
-    MultiVAE_parser.add_argument('--save', type=str, default='model.pt',
+    parser.add_argument('--save', type=str, default='model.pt',
                         help='path to save the final model')
-    MultiVAE_parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
-
+    parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
 
     # XXX 추가한 args parse
     # dafault값은 모두 기존 코드와 동일한 기본값입니다.
-    MultiVAE_parser.add_argument("--wandb", type=bool, default=False, help="wandb") # wandb 사용 여부
-    MultiVAE_parser.add_argument('--optimizer', type=str, default='RAdam', help='optimizer type (default: Adam)') # optimizer 설정
-    MultiVAE_parser.add_argument('--data_process', type=int, default=0,  help='data process') # 최근 데이터를 얼마나 사용할 것인가
-    MultiVAE_parser.add_argument('--data_random_process', type=int, default=0,  help='data random process') # 데이터를 어느 비율만큼 랜덤으로 뽑을 것인가
-    MultiVAE_parser.add_argument('--train_all', type=bool, default=True,  help='use all training set') # 훈련데이터를 모두 쓸 것인지
+    parser.add_argument("--wandb", type=bool, default=False, help="wandb") # wandb 사용 여부
+    parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer type (default: Adam)') # optimizer 설정
+    parser.add_argument('--data_process', type=int, default=0,  help='data process') # 최근 데이터를 얼마나 사용할 것인가
+    parser.add_argument('--data_random_process', type=int, default=0,  help='data random process') # 데이터를 어느 비율만큼 랜덤으로 뽑을 것인가
+    parser.add_argument('--train_all', type=bool, default=False,  help='use all training set') # 훈련데이터를 모두 쓸 것인지
     
-    MultiVAE_args = MultiVAE_parser.parse_args()
+    args = parser.parse_args()
 
-        # Set the random seed manually for reproductibility.
-    torch.manual_seed(MultiVAE_args.seed)
+    # Set the random seed manually for reproductibility.
+    torch.manual_seed(args.seed)
 
     #만약 GPU가 사용가능한 환경이라면 GPU를 사용
     if torch.cuda.is_available():
-        MultiVAE_args.cuda = True
+        args.cuda = True
 
-    device = torch.device("cuda" if MultiVAE_args.cuda else "cpu")
+    device = torch.device("cuda" if args.cuda else "cpu")
     print(device)
 
-    set_seed(MultiVAE_args.seed)
-    check_path(MultiVAE_args.output_dir)
+    set_seed(args.seed)
+    check_path(args.output_dir)
 
 
-    MultiVAE_args._data_file = MultiVAE_args.data_dir + "train_ratings.csv"
+    args.data_file = args.data_dir + "train_ratings.csv"
+    item2attribute_file = args.data_dir + args.data_name + "_item2attributes.json"
 
 
-    RecVAE_parser = argparse.ArgumentParser()
-    RecVAE_parser.add_argument('--dataset', default='/opt/ml/input/data/train/RecVAE', type=str)
-    RecVAE_parser.add_argument('--hidden-dim', type=int, default=600)
-    RecVAE_parser.add_argument('--latent-dim', type=int, default=300)
-    RecVAE_parser.add_argument('--batch-size', type=int, default=500)
-    RecVAE_parser.add_argument('--beta', type=float, default=0.4)
-    RecVAE_parser.add_argument('--gamma', type=float, default=0.005)
-    RecVAE_parser.add_argument('--lr', type=float, default=5e-4)
-    RecVAE_parser.add_argument('--n-epochs', type=int, default=1)
-    RecVAE_parser.add_argument('--n-enc_epochs', type=int, default=3)
-    RecVAE_parser.add_argument('--n-dec_epochs', type=int, default=1)
-    RecVAE_parser.add_argument('--not-alternating', type=bool, default=False)
-    RecVAE_parser.add_argument('--optimizer', type=str, default='RAdam', help='optimizer type (default: Adam)') # optimizer 설정
-    RecVAE_parser.add_argument('--wd', type=float, default=0.00,) # optimizer 설정
-    
-    RecVAE_args = RecVAE_parser.parse_args()
-
-    seed = 1337
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-
-    device = torch.device("cuda:0")
-
-    data = get_data(RecVAE_args.dataset)
-    # train_data, test_in_data, test_out_data = data
-    train_data, = data # 데이터 전체로 학습 후 결과하기 위해
-
-    ### Multi-VAE
     ###############################################################################
     # Load data
     ###############################################################################
     
-    loader = DataLoader(MultiVAE_args.data_dir)
+    loader = DataLoader(args.data_dir)
 
     n_items = loader.load_n_items()
     train_data = loader.load_data('train')
-    if MultiVAE_args.train_all == False:
+    if args.train_all == False:
         vad_data_tr, vad_data_te = loader.load_data('validation')
         test_data_tr, test_data_te = loader.load_data('test')
 
@@ -572,11 +458,11 @@ if __name__ == "__main__":
     #p_dims = [100, 300, 500, 700, n_items]
     model = MultiVAE(p_dims).to(device)
 
-    opt_module = getattr(import_module("torch.optim"), MultiVAE_args.optimizer)  # default: Adam
+    opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: Adam
     optimizer = opt_module(
         filter(lambda p: p.requires_grad, model.parameters()),
         lr=1e-3,
-        weight_decay=MultiVAE_args.wd
+        #weight_decay=args.wd
     )
     criterion = loss_function_vae
 
@@ -589,35 +475,57 @@ if __name__ == "__main__":
     update_count = 0
 
     # save model args
-    args_str = f"{MultiVAE_args.model_name}-{MultiVAE_args.data_name}"
-    MultiVAE_args.log_file = os.path.join(MultiVAE_args.output_dir, args_str + ".txt")
+    args_str = f"{args.model_name}-{args.data_name}"
+    args.log_file = os.path.join(args.output_dir, args_str + ".txt")
 
     # save model
     # XXX 저장 model 이름 변경
     # 여러 실험하기 위해 나누습니다
     
-    if MultiVAE_args.data_process != 0 : # 최근 데이터 일부만 사용하는 경우
+    if args.data_process != 0 : # 최근 데이터 일부만 사용하는 경우
         # 모델이름-데이터이름_data_최근 데이터 갯수
-        checkpoint = f"{args_str}_data_{MultiVAE_args.data_process}.pt"
-    elif MultiVAE_args.data_random_process != 0 : # 최근 데이터 일부만 사용하는 경우
+        checkpoint = f"{args_str}_data_{args.data_process}.pt"
+    elif args.data_random_process != 0 : # 최근 데이터 일부만 사용하는 경우
         # 모델이름-데이터이름_data_random_비율
-        checkpoint = f"{args_str}_data_random_{MultiVAE_args.data_random_process}.pt"
-    elif MultiVAE_args.train_all == True:
+        checkpoint = f"{args_str}_data_random_{args.data_random_process}.pt"
+    elif args.train_all == True:
         checkpoint = f"{args_str}_data_random_train_all_100.pt"
     else : # 기본값
         # 모델이름-데이터이름_epoch 수_optimizer.pt
-        checkpoint = f"{args_str}_{MultiVAE_args.epochs}_{MultiVAE_args.optimizer}.pt"
-    MultiVAE_args.checkpoint_path = os.path.join(MultiVAE_args.output_dir, checkpoint)
+        checkpoint = f"{args_str}_{args.epochs}_{args.optimizer}.pt"
+    args.checkpoint_path = os.path.join(args.output_dir, checkpoint)
 
-    early_stopping = EarlyStopping(MultiVAE_args.checkpoint_path, patience=10, verbose=True)
+    early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
 
+    # XXX wandb 설정
+    # 기본 값은 wandb를 사용하지 않습니다.
+    if args.wandb:
+        wandb.login()
+        if args.data_process != 0 : # 최근 데이터만 뽑을 때
+            wandb.init(group="Multi-VAE_data_process", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_{args.data_process}_{args.optimizer}")
+        elif args.data_random_process != 0: # 데이터를 랜덤으로 뽑을 때
+            wandb.init(group="Multi-VAE_data_process", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_random_{args.data_random_process}_{args.optimizer}")
+        else : # 기본값
+            wandb.init(group="Multi-VAE", project="MovieLens", entity="recsys-06", name=f"Multi-VAE_{args.epochs}_{args.optimizer}")
+        
+        wandb.config = args
+    
 
-    for epoch in range(1, MultiVAE_args.epochs + 1):
+    for epoch in range(1, args.epochs + 1):
         epoch_start_time = time.time()
         train(model, criterion, optimizer, is_VAE=True) # 훈련
-        if MultiVAE_args.train_all == False:
+        if args.train_all == False:
             val_loss, n100, r10, r20, r50 = evaluate(model, criterion, vad_data_tr, vad_data_te, is_VAE=True) # 검증 데이터 테스트
-        if MultiVAE_args.train_all == False:
+        # XXX wnadb 설정
+        if args.wandb:
+            wandb.log({
+                "val_loss" : val_loss,
+                "n100" : n100,
+                "r10" : r10,
+                "r20" : r20,
+                "r50" : r50
+            })
+        if args.train_all == False:
             print('-' * 100)
             print('| end of epoch {:3d} | time: {:4.2f}s | valid loss {:4.2f} | '
                     'n100 {:5.3f} | r10 {:5.3f} | r20 {:5.3f} | r50 {:5.3f}'.format(
@@ -625,28 +533,28 @@ if __name__ == "__main__":
                         n100, r10, r20, r50))
             print('-' * 100)
 
-            n_iter = epoch * len(range(0, N, MultiVAE_args.batch_size))
+            n_iter = epoch * len(range(0, N, args.batch_size))
 
         # Save the model if the n100 is the best we've seen so far.
-        # with open(MultiVAE_args.checkpoint_path, 'wb') as f:
+        # with open(args.checkpoint_path, 'wb') as f:
         #     torch.save(model, f)
-        # print(f"save model : {MultiVAE_args.checkpoint_path}")
-        if MultiVAE_args.train_all == False:
+        # print(f"save model : {args.checkpoint_path}")
+        if args.train_all == False:
             if r10 > best_r10:
-                with open(MultiVAE_args.checkpoint_path, 'wb') as f:
+                with open(args.checkpoint_path, 'wb') as f:
                     torch.save(model, f)
                 best_r10 = r10
-                print(f"save model : {MultiVAE_args.checkpoint_path}")
+                print(f"save model : {args.checkpoint_path}")
         else:
-            with open(MultiVAE_args.checkpoint_path, 'wb') as f:
+            with open(args.checkpoint_path, 'wb') as f:
                 torch.save(model, f)
-            print(f"save model : {MultiVAE_args.checkpoint_path}")
+            print(f"save model : {args.checkpoint_path}")
 
    
-    if MultiVAE_args.train_all == False:
+    if args.train_all == False:
         # Load the best saved model.
-        with open(MultiVAE_args.checkpoint_path, 'rb') as f:
-            print(f"load model : {MultiVAE_args.checkpoint_path}")
+        with open(args.checkpoint_path, 'rb') as f:
+            print(f"load model : {args.checkpoint_path}")
             model = torch.load(f)       
         # Run on test data.
         test_loss, n100, r10, r20, r50 = evaluate(model, criterion, test_data_tr, test_data_te, is_VAE=True)
@@ -656,124 +564,9 @@ if __name__ == "__main__":
         print('=' * 100)
 
     # Load the best saved model.
-    with open(MultiVAE_args.checkpoint_path, 'rb') as f:
-        print(f"load model : {MultiVAE_args.checkpoint_path}")
+    with open(args.checkpoint_path, 'rb') as f:
+        print(f"load model : {args.checkpoint_path}")
         model = torch.load(f)    
 
     # XXX submission 평가
-    MultiVAE_result = evaluate_submission(model, criterion=loss_function_vae, submission_data=submission_data, is_VAE=True)
-
-    ### RecVAE
-    model_kwargs = {
-    'hidden_dim': RecVAE_args.hidden_dim,
-    'latent_dim': RecVAE_args.latent_dim,
-    'input_dim': train_data.shape[1]
-    }
-    metrics = [{'metric': recall, 'k': 10}]
-
-    best_recall = -np.inf
-    train_scores, valid_scores = [], []
-
-    model = VAE(**model_kwargs).to(device)
-    model_best = VAE(**model_kwargs).to(device)
-
-    learning_kwargs = {
-        'model': model,
-        'train_data': train_data,
-        'batch_size': RecVAE_args.batch_size,
-        'beta': RecVAE_args.beta,
-        'gamma': RecVAE_args.gamma
-    }
-
-    decoder_params = set(model.decoder.parameters())
-    encoder_params = set(model.encoder.parameters())
-
-    opt_encoder_module = getattr(import_module("torch.optim"), RecVAE_args.optimizer)  # default: Adam
-    opt_decoder_module = getattr(import_module("torch.optim"), RecVAE_args.optimizer)  # default: Adam
-    optimizer_encoder = opt_encoder_module(
-            encoder_params,
-            lr=RecVAE_args.lr,
-            weight_decay=RecVAE_args.wd
-        )
-
-    optimizer_decoder = opt_decoder_module(
-            decoder_params,
-            lr=RecVAE_args.lr,
-            weight_decay=RecVAE_args.wd
-        )
-
-    for epoch in range(RecVAE_args.n_epochs):
-        if RecVAE_args.not_alternating:
-            run(opts=[optimizer_encoder, optimizer_decoder], n_epochs=1, dropout_rate=0.5, **learning_kwargs)
-        else:
-            run(opts=[optimizer_encoder], n_epochs=RecVAE_args.n_enc_epochs, dropout_rate=0.5, **learning_kwargs)
-            model.update_prior()
-            run(opts=[optimizer_decoder], n_epochs=RecVAE_args.n_dec_epochs, dropout_rate=0, **learning_kwargs)
-
-        train_scores.append(
-            evaluate(model, train_data, train_data, metrics, 0.01)[0]
-        )
-
-        #wandb.log({'score': train_scores[-1]})
-        
-        # if train_scores[-1] > best_recall:
-        #     best_recall = train_scores[-1]
-        #     model_best.load_state_dict(deepcopy(model.state_dict()))
-        #     print("save RecVAE model")
-        model_best.load_state_dict(deepcopy(model.state_dict()))
-        print("save RecVAE model")
-            
-
-        print(f'epoch {epoch} | train recall@10: {train_scores[-1]:.4f}')
-
-    RecVAE_result = result(model_best,train_data)
-
-    ensemble_result = RecVAE_result#+MultiVAE_result*0.2
-
-    # XXX submission 결과
-    raw_data = pd.read_csv('/opt/ml/input/data/train/train_ratings.csv')
-    submission_user = list()
-    submission_item = list()
-
-
-
-    unique_sid = pd.unique(raw_data['item'])
-    unique_uid = pd.unique(raw_data['user'])
-    show2id = dict((sid, i) for (i, sid) in enumerate(unique_sid))
-    profile2id = dict((pid, i) for (i, pid) in enumerate(unique_uid))
-
-    for i in range(len(ensemble_result)):
-        idxes = bn.argpartition(-ensemble_result[i], 10)[:10] # 유저에게 추천할 10개 영화를 가져옴
-        tmp = list()
-        # id2show 과정
-        for j in idxes:                    
-            tmp.append(list(show2id.keys())[j]) # id2show # = tmp.append(raw_data['item'].unique()[j])
-        submission_item.append(tmp)
-
-    submission_item = np.array(submission_item).reshape(-1, 1)
-    submission_user = raw_data['user'].unique().repeat(10)
-    submission_user = np.array(submission_user).reshape(-1, 1)
-
-    submission_result = np.hstack((submission_user,submission_item))
-
-    submission_result = pd.DataFrame(submission_result, columns=['user','item'])  
-    submission_result.to_csv(os.path.join(MultiVAE_args.output_dir, f'submission_ensemble.csv'), index=False)
-    print("export submission : ", os.path.join(MultiVAE_args.output_dir, f'submission_ensemble.csv'))
-
-        # XXX submission export 
-    # if MultiVAE_args.data_process != 0: # 최근 데이터 일부만 사용한 경우
-    #     # submission_data_최근 데이터 갯수.csv
-    #     result.to_csv(os.path.join(MultiVAE_args.output_dir, f'submission_data_{MultiVAE_args.data_process}.csv'), index=False)
-    #     print("export submission : ", os.path.join(MultiVAE_args.output_dir, f'submission_data_{MultiVAE_args.data_process}.csv'))
-    # elif MultiVAE_args.data_random_process != 0:
-    #     result.to_csv(os.path.join(MultiVAE_args.output_dir, f'submission_data_random_{MultiVAE_args.data_random_process}.csv'), index=False)
-    #     print("export submission : ", os.path.join(MultiVAE_args.output_dir, f'submission_data_random_{MultiVAE_args.data_random_process}.csv'))
-    # elif MultiVAE_args.train_all == True:
-    #     result.to_csv(os.path.join(MultiVAE_args.output_dir, f'submission_data_all_{MultiVAE_args.batch_size}_100.csv'), index=False)
-    #     print("export submission : ", os.path.join(MultiVAE_args.output_dir, f'submission_data_all_{MultiVAE_args.batch_size}_100.csv'))
-    # else : # 기본값             
-    #     # submission_epoch 수_optimizer.csv
-    #     result.to_csv(os.path.join(MultiVAE_args.output_dir, f'submission_{MultiVAE_args.epochs}_{MultiVAE_args.optimizer}.csv'), index=False)
-    #     print("export submission : ", os.path.join(MultiVAE_args.output_dir, f'submission_{MultiVAE_args.epochs}_{MultiVAE_args.optimizer}.csv'))
-    
-
+    evaluate_submission(model, criterion=loss_function_vae, submission_data=submission_data, is_VAE=True)
