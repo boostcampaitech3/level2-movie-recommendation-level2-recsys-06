@@ -9,7 +9,6 @@ from modules import Encoder, LayerNorm
 class MultiVAE(nn.Module):
     """
     Container module for Multi-VAE.
-
     Multi-VAE : Variational Autoencoder with Multinomial Likelihood
     See Variational Autoencoders for Collaborative Filtering
     https://arxiv.org/abs/1802.05814
@@ -105,3 +104,50 @@ def loss_function_vae(recon_x, x, mu, logvar, anneal=1.0):
 def loss_function_dae(recon_x, x):
     BCE = -torch.mean(torch.sum(F.log_softmax(recon_x, 1) * x, -1))
     return BCE
+
+def focal_loss(recon_x, x):
+    alpha, gamma = 0.25, 2
+    alpha = torch.tensor([alpha, 1-alpha]).cuda()
+    
+    #BCE = torch.mean(torch.sum(F.log_softmax(recon_x, 1) * x, -1))
+    BCE = nn.CrossEntropyLoss()(recon_x, x)
+    pt = torch.exp(-BCE)
+    F_loss = alpha * (1-pt)**gamma * BCE
+
+    return F_loss.mean()
+
+
+
+# # https://velog.io/@heaseo/Focalloss-%EC%84%A4%EB%AA%85
+# def focal_loss(recon_x, x):
+
+#     alpha, gamma = 0.25, 2
+#     alpha = torch.tensor([alpha, 1-alpha]).cuda()
+#     gamma = gamma
+
+#     BCE_loss = F.binary_cross_entropy_with_logits(recon_x, x, reduction='none')
+#     x = x.type(torch.long)
+#     at = alpha.gather(0, x.data.view(-1))
+#     pt = torch.exp(-BCE_loss)
+#     F_loss = at*(1-pt)**gamma * BCE_loss
+
+#     return F_loss.mean()
+
+# https://github.com/h-y-e-j-i/boost-camp_image-classification/blob/master/baseline/loss.py
+# RuntimeError: 0D or 1D target tensor expected, multi-target not supported
+# def focal_loss(recon_x, x):
+
+#     weight = 0.25
+#     weight = torch.tensor([weight, 1-weight]).cuda()
+#     gamma = 2
+#     reduction = 'mean'
+
+#     log_prob = F.log_softmax(recon_x, dim=-1)
+#     prob = torch.exp(log_prob)
+
+#     return F.nll_loss(
+#         ((1 - prob) ** gamma) * log_prob,
+#         x,
+#         weight=weight,
+#         reduction=reduction
+#     )
