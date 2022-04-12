@@ -11,9 +11,9 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', default="/opt/ml/input/data/train/train_ratings.csv", type=str)
-parser.add_argument('--output_dir', default="/opt/ml/input/data/train/RecVAE/", type=str)
+parser.add_argument('--output_dir', default="/workspace/output/", type=str)
 parser.add_argument('--min_users_per_item', type=int, default=0)
-parser.add_argument('--heldout_users', default=0, type=int)
+parser.add_argument('--heldout_users', default=3000, type=int)
 parser.add_argument('--test', default=False, type=bool)
 
 args = parser.parse_args()
@@ -27,14 +27,14 @@ raw_data = pd.read_csv(dataset, header=0)
 
 unique_uid = raw_data['user'].unique()
 
-# np.random.seed(98765)
-# idx_perm = np.random.permutation(unique_uid.size)
-# unique_uid = unique_uid[idx_perm]
+np.random.seed(98765)
+idx_perm = np.random.permutation(unique_uid.size)
+unique_uid = unique_uid[idx_perm]
 
 n_users = unique_uid.size
 
 tr_users = unique_uid[:(n_users - n_heldout_users)]
-# te_users = unique_uid[(n_users - n_heldout_users):]
+te_users = unique_uid[(n_users - n_heldout_users):]
 
 train_plays = raw_data.loc[raw_data['user'].isin(tr_users)]
 
@@ -81,10 +81,10 @@ def split_train_test_proportion(data, test_prop=0.2):
     return data_tr, data_te
 
 
-# test_plays = raw_data.loc[raw_data['user'].isin(te_users)]
-# test_plays = test_plays.loc[test_plays['item'].isin(unique_sid)]
+test_plays = raw_data.loc[raw_data['user'].isin(te_users)]
+test_plays = test_plays.loc[test_plays['item'].isin(unique_sid)]
 
-# test_plays_tr, test_plays_te = split_train_test_proportion(test_plays)
+test_plays_tr, test_plays_te = split_train_test_proportion(test_plays)
 
 def numerize(tp):
     uid = list(map(lambda x: profile2id[x], tp['user']))
@@ -95,8 +95,8 @@ def numerize(tp):
 train_data = numerize(train_plays)
 train_data.to_csv(os.path.join(output_dir, 'train.csv'), index=False)
 
-# test_data_tr = numerize(test_plays_tr)
-# test_data_tr.to_csv(os.path.join(output_dir, 'test_tr.csv'), index=False)
+test_data_tr = numerize(test_plays_tr)
+test_data_tr.to_csv(os.path.join(output_dir, 'test_tr.csv'), index=False)
 
-# test_data_te = numerize(test_plays_te)
-# test_data_te.to_csv(os.path.join(output_dir, 'test_te.csv'), index=False)
+test_data_te = numerize(test_plays_te)
+test_data_te.to_csv(os.path.join(output_dir, 'test_te.csv'), index=False)

@@ -27,7 +27,7 @@ def load_tr_te_data(csv_file_tr, csv_file_te, n_items, n_users, global_indexing=
 
     if global_indexing:
         start_idx = 0
-        end_idx = len(unique_uid) - 1
+        end_idx = n_users - 1
     else:
         start_idx = min(tp_tr['uid'].min(), tp_te['uid'].min())
         end_idx = max(tp_tr['uid'].max(), tp_te['uid'].max())
@@ -58,12 +58,12 @@ def get_data(dataset, global_indexing=False):
     
     train_data = load_train_data(os.path.join(dataset, 'train.csv'), n_items, n_users, global_indexing=global_indexing)
 
-    # test_data_tr, test_data_te = load_tr_te_data(os.path.join(dataset, 'test_tr.csv'),
-    #                                              os.path.join(dataset, 'test_te.csv'),
-    #                                              n_items, n_users, 
-    #                                              global_indexing=global_indexing)
+    test_data_tr, test_data_te = load_tr_te_data(os.path.join(dataset, 'test_tr.csv'),
+                                                 os.path.join(dataset, 'test_te.csv'),
+                                                 n_items, n_users,
+                                                 global_indexing=global_indexing)
     
-    data = train_data, # test_data_tr, test_data_te
+    data = train_data, test_data_tr, test_data_te
     data = (x.astype('float32') for x in data)
     
     return data

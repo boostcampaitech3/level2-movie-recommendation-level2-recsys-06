@@ -82,7 +82,8 @@ class VAE(nn.Module):
         self.encoder = Encoder(hidden_dim, latent_dim, input_dim)
         self.prior = CompositePrior(hidden_dim, latent_dim, input_dim)
         self.decoder = nn.Linear(latent_dim, input_dim)
-        
+        self.ease = nn.Linear(in_features=input_dim, out_features=input_dim)
+
     def reparameterize(self, mu, logvar):
         if self.training:
             std = torch.exp(0.5*logvar)
@@ -92,10 +93,13 @@ class VAE(nn.Module):
             return mu
 
     def forward(self, user_ratings, beta=None, gamma=1, dropout_rate=0.5, calculate_loss=True):
-        mu, logvar = self.encoder(user_ratings, dropout_rate=dropout_rate)    
+        mu, logvar = self.encoder(user_ratings, dropout_rate=dropout_rate)
+        EASE = self.ease(user_ratings, user_ratings).fill_diagonal_(0)
+
         z = self.reparameterize(mu, logvar)
+
         x_pred = self.decoder(z)
-        
+
         if calculate_loss:
             if gamma:
                 norm = user_ratings.sum(dim=-1)
@@ -110,7 +114,7 @@ class VAE(nn.Module):
             return (mll, kld), negative_elbo
             
         else:
-            return x_pred
+            return x_pred * EASE
 
     def update_prior(self):
         self.prior.encoder_old.load_state_dict(deepcopy(self.encoder.state_dict()))
