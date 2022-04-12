@@ -9,8 +9,6 @@ class EASE:
     def __init__(self):
         self.user_enc = LabelEncoder()
         self.item_enc = LabelEncoder()
-        self.last_interaction = LabelEncoder()
-        self.item_year = LabelEncoder()
 
     def _get_users_and_items(self, df):
         users = self.user_enc.fit_transform(df.loc[:, 'user'])
@@ -46,8 +44,6 @@ class EASE:
         dd = train.loc[train.user.isin(users)]
         dd['ci'] = self.item_enc.transform(dd.item)
         dd['cu'] = self.user_enc.transform(dd.user)
-        dd['last_interaction'] = dd.last_interaction
-        dd['item_year'] = dd.item_year
 
         g = dd.groupby('user')
         for user, group in tqdm(g):
@@ -55,20 +51,25 @@ class EASE:
 
             # 본 영화를 item 중에 제거한 index list.
             candidates = [item for item in items if item not in watched]
-            last_interaction = group['last_interaction'].iloc[group['cu'].iloc[0]]
-            item_year = group['item_year']
             u = group['cu'].iloc[0] # 예측한 user 번호
             pred = np.take(self.pred[u, :], candidates) # 유저의 예측 값중 후보들만 가져온다.
             res = np.argpartition(pred, -k)[-k:] # Top 10
             r = pd.DataFrame({
                 "user": [user] * len(res),
                 "item": np.take(candidates, res),
-                #"score": np.take(pred, res)
-            }) #.sort_values('score', ascending=False)
+                "score": np.take(pred, res)
+            }).sort_values('score', ascending=False)
             df = df.append(r, ignore_index=True)
         df['item'] = self.item_enc.inverse_transform(df['item'])
         print("finish predict")
         return df
+
+    def make_all_predicted(self):
+        all_ = pd.DataFrame(self.pred)
+        all_.to_csv(
+            "/workspace/output/all_result.csv", index=False
+        )
+
 
 # using year
 class EASE2:
@@ -160,7 +161,6 @@ class EASE2:
                 "score": np.take(pred, res)
             }).sort_values('score', ascending=False)
             df = df.append(r, ignore_index=True)
-
 
         df['item'] = self.item_enc.inverse_transform(df['item'])
         print("finish predict")

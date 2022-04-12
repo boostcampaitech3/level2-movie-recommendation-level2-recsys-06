@@ -23,33 +23,32 @@ def WandB():
 def main():
     # WandB()
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data", default="/workspace/output/user_item_last_year_final.csv", type=str)
+    # for EASE2 "/workspace/output/user_item_last_year_final.csv"
+    parser.add_argument("--data", default="/opt/ml/input/data/train/train_ratings.csv", type=str)
     parser.add_argument("--output_dir", default="/workspace/output/", type=str)
-    parser.add_argument("--output_file_name", default="submission_lambda700.csv", type=str)
-    parser.add_argument("--lambda_", default=700, type=float)
+    parser.add_argument("--output_file_name", default="submission_lambda500_top50.csv", type=str)
+    parser.add_argument("--lambda_", default=500, type=float)
 
     args = parser.parse_args()
     # wandb.config.update(args)
 
-    ''' no year
     train_df = pd.read_csv(args.data)
     ease = EASE()
     users = train_df["user"].unique()
     items = train_df["item"].unique()
     ease.fit(train_df, lambda_=args.lambda_)
-    result_df = ease.predict(train_df, users, items, 10)
-    '''
+    ease.make_all_predicted()
 
-    train_df = pd.read_csv(args.data)
-    ease = EASE2(train_df)
-    users = train_df["user"].unique()
-    items = train_df["item"].unique()
-    ease.fit(train_df, lambda_=args.lambda_)
-    result_df = ease.predict(train_df, users, items, 10)
+    # train_df = pd.read_csv(args.data)
+    # ease = EASE(train_df)
+    # users = train_df["user"].unique()
+    # items = train_df["item"].unique()
+    # ease.fit(train_df, lambda_=args.lambda_)
+    # result_df = ease.predict(train_df, users, items, 10)
 
-    result_df[["user", "item"]].to_csv(
-        args.output_dir + args.output_file_name, index=False
-    )
+    # result_df[["user", "item", "score"]].to_csv(
+    #     args.output_dir + args.output_file_name, index=False
+    # )
 
 
 if __name__ == "__main__":
