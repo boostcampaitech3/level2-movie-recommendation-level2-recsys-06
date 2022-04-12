@@ -23,11 +23,10 @@ import wandb
 #         group="RecVAE"
 # )
 
-
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', default='/workspace/output/', type=str)
-parser.add_argument('--hidden-dim', type=int, default=600)
-parser.add_argument('--latent-dim', type=int, default=250)
+parser.add_argument('--hidden-dim', type=int, default=4096)
+parser.add_argument('--latent-dim', type=int, default=2048)
 parser.add_argument('--batch-size', type=int, default=500)
 parser.add_argument('--beta', type=float, default=0.4)
 parser.add_argument('--gamma', type=float, default=0)
