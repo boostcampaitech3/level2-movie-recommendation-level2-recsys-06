@@ -11,6 +11,18 @@ def swish(x):
 def log_norm_pdf(x, mu, logvar):
     return -0.5*(logvar + np.log(2 * np.pi) + (x - mu).pow(2) / logvar.exp())
 
+# class Sampling(nn.Module):
+#     def __init__(self):
+#         super(Sampling, self).__init__()
+#
+#     def forward(self, inputs):
+#         z_mean, z_log_var = inputs
+#         batch = z_mean.shape[0]
+#         dim = z_mean.shape[1]
+#         epsilon = torch.normal(mean=torch.zeros(batch, dim), std=1.)
+#         # epsilon = tf.keras.backend.random_normal(shape=(batch, dim), stddev=1.)
+#         return z_mean + torch.exp(0.5 * z_log_var) * epsilon
+
 class CompositePrior(nn.Module):
     def __init__(self, hidden_dim, latent_dim, input_dim, mixture_weights=[3/20, 3/4, 1/10]):
         super(CompositePrior, self).__init__()
@@ -100,7 +112,7 @@ class Encoder(nn.Module):
         self.ln7 = nn.LayerNorm(hidden_dim, eps=eps)
         self.fc_mu = nn.Linear(hidden_dim, latent_dim)
         self.fc_logvar = nn.Linear(hidden_dim, latent_dim)
-        
+
     def forward(self, x, dropout_rate):
         norm = x.pow(2).sum(dim=-1).sqrt()
         x = x / norm[:, None]
@@ -126,39 +138,37 @@ class VAE(nn.Module):
         self.decoder = Decoder(hidden_dim, latent_dim, input_dim)
         self.ease = nn.Linear(in_features=input_dim, out_features=input_dim, bias=False)
         self.Sig = nn.Sigmoid()
+        self.kl_loss = nn.KLDivLoss(reduction="batchmean")
+
+        self.celoss = nn.CrossEntropyLoss()
 
     def reparameterize(self, mu, logvar):
-        if self.training:
-            std = torch.exp(0.5*logvar)
-            eps = torch.randn_like(std)
-            return eps.mul(std).add_(mu)
-        else:
-            return mu
+        std = torch.exp(0.5*logvar)
+        eps = torch.randn_like(std)
+        return eps.mul(std).add_(mu)
+
+    def Sampling(self, z_mean_, z_log_var_):
+        z_mean, z_log_var = z_mean_, z_log_var_
+        batch = z_mean.shape[0]
+        dim = z_mean.shape[1]
+        epsilon = torch.normal(mean=torch.zeros(batch, dim), std=1.)
+        # epsilon = tf.keras.backend.random_normal(shape=(batch, dim), stddev=1.)
+        return z_mean + torch.exp(0.5 * z_log_var) * epsilon
 
     def forward(self, user_ratings, beta=None, gamma=1, dropout_rate=0.5, calculate_loss=True):
+
         mu, logvar = self.encoder(user_ratings, dropout_rate=dropout_rate)
         EASE = self.ease(user_ratings).fill_diagonal_(0)
-        EASE = self.Sig(EASE)
 
         z = self.reparameterize(mu, logvar)
 
         x_pred = self.decoder(z)
-
-        if calculate_loss:
-            if gamma:
-                norm = user_ratings.sum(dim=-1)
-                kl_weight = gamma * norm
-            elif beta:
-                kl_weight = beta
-
-            mll = (F.log_softmax(x_pred, dim=-1) * user_ratings).sum(dim=-1).mean()
-            kld = (log_norm_pdf(z, mu, logvar) - self.prior(user_ratings, z)).sum(dim=-1).mul(kl_weight).mean()
-            negative_elbo = -(mll - kld)
-            
-            return (mll, kld), negative_elbo
-            
-        else:
-            return x_pred * EASE
+        if not calculate_loss:
+            return x_pred
+        EASE = self.Sig(EASE)
+        # loss_result = self.kl_loss(user_ratings, x_pred * EASE)
+        loss_result = self.celoss(user_ratings, x_pred*EASE)
+        return x_pred * EASE, loss_result
 
     def update_prior(self):
         self.prior.encoder_old.load_state_dict(deepcopy(self.encoder.state_dict()))

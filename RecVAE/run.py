@@ -6,37 +6,23 @@ from torch import optim
 import random
 from copy import deepcopy
 
-from utils import get_data, recall
+from utils import get_data, recall, ndcg
 from model import VAE
+from tqdm import tqdm
 import argparse
-from importlib import import_module
-
-import pandas as pd
-import bottleneck as bn
-
-import wandb
-# wandb.init(
-#         project="MovieLens", 
-#         entity="recsys-06",  
-#         name="RecVAE beta 0.4",
-#         notes="recall 10",
-#         group="RecVAE"
-# )
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', default='/workspace/output/', type=str)
-parser.add_argument('--hidden-dim', type=int, default=4096)
-parser.add_argument('--latent-dim', type=int, default=2048)
+parser.add_argument('--dataset', default="/workspace/output/", type=str)
+parser.add_argument('--hidden-dim', type=int, default=600)
+parser.add_argument('--latent-dim', type=int, default=200)
 parser.add_argument('--batch-size', type=int, default=500)
-parser.add_argument('--beta', type=float, default=0.4)
-parser.add_argument('--gamma', type=float, default=0)
+parser.add_argument('--beta', type=float, default=None)
+parser.add_argument('--gamma', type=float, default=0.005)
 parser.add_argument('--lr', type=float, default=5e-4)
-parser.add_argument('--n-epochs', type=int, default=60)
+parser.add_argument('--n-epochs', type=int, default=50)
 parser.add_argument('--n-enc_epochs', type=int, default=3)
 parser.add_argument('--n-dec_epochs', type=int, default=1)
 parser.add_argument('--not-alternating', type=bool, default=False)
-# parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer type (default: Adam)')# optimizer 설정
-parser.add_argument('--wd', type=float, default=0.00) # optimizer 설정
 args = parser.parse_args()
 
 seed = 1337
@@ -48,22 +34,21 @@ device = torch.device("cuda:0")
 
 data = get_data(args.dataset)
 train_data, test_in_data, test_out_data = data
-# train_data, = data # 데이터 전체로 학습 후 결과하기 위해
 
 
 def generate(batch_size, device, data_in, data_out=None, shuffle=False, samples_perc_per_epoch=1):
     assert 0 < samples_perc_per_epoch <= 1
-    
+
     total_samples = data_in.shape[0]
     samples_per_epoch = int(total_samples * samples_perc_per_epoch)
-    
+
     if shuffle:
         idxlist = np.arange(total_samples)
         np.random.shuffle(idxlist)
         idxlist = idxlist[:samples_per_epoch]
     else:
         idxlist = np.arange(samples_per_epoch)
-    
+
     for st_idx in range(0, samples_per_epoch, batch_size):
         end_idx = min(st_idx + batch_size, samples_per_epoch)
         idx = idxlist[st_idx:end_idx]
@@ -77,17 +62,17 @@ class Batch:
         self._idx = idx
         self._data_in = data_in
         self._data_out = data_out
-    
+
     def get_idx(self):
         return self._idx
-    
+
     def get_idx_to_dev(self):
         return torch.LongTensor(self.get_idx()).to(self._device)
-        
+
     def get_ratings(self, is_out=False):
         data = self._data_out if is_out else self._data_in
         return data[self._idx]
-    
+
     def get_ratings_to_dev(self, is_out=False):
         return torch.Tensor(
             self.get_ratings(is_out).toarray()
@@ -97,31 +82,31 @@ class Batch:
 def evaluate(model, data_in, data_out, metrics, samples_perc_per_epoch=1, batch_size=500):
     metrics = deepcopy(metrics)
     model.eval()
-    
+
     for m in metrics:
         m['score'] = []
-    
+    print("evaluate")
     for batch in generate(batch_size=batch_size,
                           device=device,
                           data_in=data_in,
                           data_out=data_out,
                           samples_perc_per_epoch=samples_perc_per_epoch
-                         ):
-        
+                          ):
+
         ratings_in = batch.get_ratings_to_dev()
         ratings_out = batch.get_ratings(is_out=True)
-    
+
         ratings_pred = model(ratings_in, calculate_loss=False).cpu().detach().numpy()
-        
+
         if not (data_in is data_out):
             ratings_pred[batch.get_ratings().nonzero()] = -np.inf
-            
+
         for m in metrics:
             m['score'].append(m['metric'](ratings_pred, ratings_out, k=m['k']))
 
     for m in metrics:
         m['score'] = np.concatenate(m['score']).mean()
-        
+
     return [x['score'] for x in metrics]
 
 
@@ -133,10 +118,10 @@ def run(model, opts, train_data, batch_size, n_epochs, beta, gamma, dropout_rate
 
             for optimizer in opts:
                 optimizer.zero_grad()
-                
+
             _, loss = model(ratings, beta=beta, gamma=gamma, dropout_rate=dropout_rate)
             loss.backward()
-            
+
             for optimizer in opts:
                 optimizer.step()
 
@@ -148,10 +133,11 @@ model_kwargs = {
 }
 metrics = [{'metric': recall, 'k': 10}]
 
-best_recall = -np.inf
+best_ndcg = -np.inf
 train_scores, valid_scores = [], []
 
 model = VAE(**model_kwargs).to(device)
+print(model)
 model_best = VAE(**model_kwargs).to(device)
 
 learning_kwargs = {
@@ -161,33 +147,12 @@ learning_kwargs = {
     'beta': args.beta,
     'gamma': args.gamma
 }
+
 decoder_params = set(model.decoder.parameters())
 encoder_params = set(model.encoder.parameters())
+
 optimizer_encoder = optim.Adam(encoder_params, lr=args.lr)
 optimizer_decoder = optim.Adam(decoder_params, lr=args.lr)
-
-# decoder_params = set(model.decoder.parameters())
-# encoder_params = set(model.encoder.parameters())
-#
-# opt_encoder_module = getattr(import_module("torch.optim"), args.optimizer)  # default: Adam
-# opt_decoder_module = getattr(import_module("torch.optim"), args.optimizer)  # default: Adam
-# optimizer_encoder = opt_encoder_module(
-#         encoder_params,
-#         lr=args.lr,
-#         weight_decay=args.wd
-#     )
-#
-# optimizer_decoder = opt_decoder_module(
-#         decoder_params,
-#         lr=args.lr,
-#         weight_decay=args.wd
-#     )
-
-#optimizer_encoder = optim.Adam(encoder_params, lr=args.lr)
-#optimizer_decoder = optim.Adam(decoder_params, lr=args.lr)
-
-
-
 
 for epoch in range(args.n_epochs):
 
@@ -201,57 +166,20 @@ for epoch in range(args.n_epochs):
     train_scores.append(
         evaluate(model, train_data, train_data, metrics, 0.01)[0]
     )
+    # print(epoch+1, " epoch's metric: recall " , train_scores)
+    # valid_scores.append(
+    #     evaluate(model, valid_in_data, valid_out_data, metrics, 1)[0]
+    # )
 
-    #wandb.log({'score': train_scores[-1]})
-    
-    if train_scores[-1] > best_recall:
-        best_recall = train_scores[-1]
-        model_best.load_state_dict(deepcopy(model.state_dict()))
-        
-
+    # if valid_scores[-1] > best_ndcg:
+    #     best_ndcg = valid_scores[-1]
+    #     model_best.load_state_dict(deepcopy(model.state_dict()))
+    #
     print(f'epoch {epoch} | train recall@10: {train_scores[-1]:.4f}')
 
-
-    
-test_metrics =  [{'metric': recall, 'k': 10}]
+test_metrics = [ {'metric': recall, 'k': 10}]
 
 final_scores = evaluate(model_best, test_in_data, test_out_data, test_metrics)
 
 for metric, score in zip(test_metrics, final_scores):
     print(f"{metric['metric'].__name__}@{metric['k']}:\t{score:.4f}")
-
-# torch.save(model_best.state_dict(), './RecVAE epochs 60 beta 0.4 latent-dim 250.pth')
-
-def result(model, data_in, samples_perc_per_epoch=1, batch_size=500):
-    model.eval()
-    items=[]
-    user = pd.read_csv('/opt/ml/input/data/train/RecVAE/unique_uid.csv', header=None)
-    item = pd.read_csv('/opt/ml/input/data/train/RecVAE/unique_sid.csv', header=None)
-    item = item.to_numpy()
-    for batch in generate(batch_size=batch_size,
-                          device=device,
-                          data_in=data_in,
-                          samples_perc_per_epoch=samples_perc_per_epoch
-                         ):
-        
-        ratings_in = batch.get_ratings_to_dev()
-    
-        ratings_pred = model(ratings_in, calculate_loss=False).cpu().detach().numpy()
-        
-        ratings_pred[batch.get_ratings().nonzero()] = -np.inf
-
-
-        batch_users = ratings_pred.shape[0]
-        idx = bn.argpartition(-ratings_pred, 10, axis=1)
-        X_pred_binary = np.zeros_like(ratings_pred, dtype=bool)
-        X_pred_binary[np.arange(batch_users)[:, np.newaxis], idx[:, :10]] = True
-        for i in X_pred_binary:
-            items.append(item[i])
-    users = np.array(user)
-    users = users.repeat(10).reshape(-1,1)
-    items = np.array(items).reshape(-1,1)
-    result = np.concatenate((users,items),axis=1)
-    result = pd.DataFrame(result, columns=['user','item'])
-    result.to_csv(f'/opt/ml/input/code/output/RecVAE_{args.optimizer}.csv', index=False)
-
-# result(model_best,train_data)
