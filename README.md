@@ -29,3 +29,88 @@ pip install -r requirements.txt
    ```
    python inference.py
    ```
+
+# level2-movie-recommendation-level2-recsys-06
+
+## ❗ 주제 설명
+
+- 시간 순으로 정렬된 영화 시청 이력에서 중간의 일부 데이터가 누락된 상황일 때, 그 누락된 아이템들과 마지막 아이템을 예측
+
+
+
+## 👋 팀원 소개
+
+|[강신구](https://github.com/Kang-singu)|[김백준](https://github.com/middle-100)|[김혜지](https://github.com/h-y-e-j-i)|[이상연](https://github.com/qwedsazxc456)|[전인혁](https://github.com/inhyeokJeon)|
+| :-------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------------------------------------: |
+| [![Avatar](https://user-images.githubusercontent.com/69205130/157381112-6343be93-9a26-4778-be7d-cc038f32b459.png)](https://github.com/h-y-e-j-i) | [![Avatar](https://user-images.githubusercontent.com/69205130/157381123-15a8abd6-3dac-4dc1-9aae-d61e94cd1d04.png)](https://github.com/ahyeon0508) | [![Avatar](https://user-images.githubusercontent.com/92902312/163905790-89f44713-174b-40dd-96ed-87dbfaf47973.png)](https://github.com/middle-100) | [![Avatar](https://user-images.githubusercontent.com/69205130/157381102-fedbcca1-b9e8-47d6-aba4-4ae3ac182a6f.png)](https://github.com/sun1187) | [![Avatar](https://user-images.githubusercontent.com/69205130/157381074-7d91c0e9-756a-4d23-954f-aa43e0688b30.png)](https://github.com/arkdusdyk) |
+
+
+
+## 🔨 Installation
+
+- torch == 1.6.0
+- torchvision == 0.7.0
+- tensorboard == 2.4.1
+- pandas == 1.1.5
+- opencv-python == 4.5.1.48
+- scikit-learn ~= 0.24.1
+- matplotlib == 3.2.1
+- efficientnet_pytorch
+
+```python
+$ pip install -r $ROOT/level1-image-classification-level1-recsys-09/requirements.txt
+```
+
+
+
+## ✍ Function Description
+
+`model.py`: EfficientNet-b4와  GoogLeNet을 Ensemble하여 모델링
+
+`dataset.py`: data augmentation, labeling 등 model training에 사용되는 dataset 생성
+
+`loss.py`: cross entropy, f1 score, arcface를 이용해 loss 값을 계산
+
+`train.py`: model을 사용자가 지정한 parameter에 따라 실행하여 training
+
+
+## 🏢 Structure
+
+```bash
+level1-image-classification-level1-recsys-09
+│
+├── README.md
+├── requirements.txt
+├── EDA
+│   ├── data_EDA.ipynb
+│   ├── image_EDA.ipynb
+│   └── torchvision_transforms.ipynb
+└── python
+    ├── dataset.py
+    ├── loss.py
+    ├── model.py
+    └── train.py
+```
+
+
+## ⚙️ Training 명령어
+
+```python
+python train.py --model 'Ensemble' --TTA True --name 'final model' --epoch 3
+```
+
+![image](https://user-images.githubusercontent.com/44939208/157379480-737623fe-8237-47bc-8c4a-03897a8fd3e9.png)
+
+
+## 🖼️ 실행 결과
+
+| 모델명 | F1-Score | Accuracy | 최종 순위 |
+| --- | --- | --- | --- |
+| EfficientNet-b4 + GoogLeNet | 0.7269 | 77.3016 | private 35등 |
+
+
+## 📜 참고자료
+
+[EfficientNet-PyTorch](https://github.com/lukemelas/EfficientNet-PyTorch)
+
+[GoogLeNet](https://pytorch.org/vision/stable/_modules/torchvision/models/googlenet.html)
