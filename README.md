@@ -77,7 +77,7 @@ python run.py --optimizer 'RAdam'
 |--hidden-dim|int|hidden dim|600|
 |--latent-dim|int|latent dim|300|
 |--batch-size|int|batch size|500|
-|--beta|float|beta의 크기 0~1사이|CustomAugmentation|
+|--beta|float|beta의 크기 0~1사이|None|
 |--gamma|float|gamma 0으로 beta 사용|0.005|
 |--lr|float|learning rate|5e-4|
 |--n-epochs|int|epoch수|50|
