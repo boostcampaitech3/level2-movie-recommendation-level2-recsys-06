@@ -73,17 +73,17 @@ python run.py --optimizer 'RAdam'
 ```
 |명령어|타입|설명|기본값|
 |------|---|---|---|
-|--dataset|str|random seed||
-|--hidden-dim|int|number of epochs to train|600|
-|--latent-dim|int|dataset augmentation type|300|
-|--batch-size|int|data augmentation type|500|
-|--beta|float|data augmentation type|CustomAugmentation|
-|--gamma|float|data augmentation type|0.005|
-|--lr|float|data augmentation type|5e-4|
-|--n-epochs|int|data augmentation type|50|
-|--n-enc_epochs|int|data augmentation type|3|
-|--n-dec_epochs|int|data augmentation type|1|
-|--not-alternating|bool|data augmentation type|False|
+|--dataset|str|preprocessing한 데이터의 경로||
+|--hidden-dim|int|hidden dim|600|
+|--latent-dim|int|latent dim|300|
+|--batch-size|int|batch size|500|
+|--beta|float|beta의 크기 0~1사이|CustomAugmentation|
+|--gamma|float|gamma 0으로 beta 사용|0.005|
+|--lr|float|learning rate|5e-4|
+|--n-epochs|int|epoch수|50|
+|--n-enc_epochs|int|encoding 부분 dropout|3|
+|--n-dec_epochs|int|decoding 부분 dropout|1|
+|--not-alternating|bool|--n-enc_epochs/--n-dec_epochs 사용여부|False|
 
 ### EASE
 ```python
