@@ -87,13 +87,13 @@ python run.py --optimizer 'RAdam'
 
 ### EASE
 ```python
-python run_ease.py --lambda 700
+python run_ease.py --lambda 500
 ```
 |명령어|타입|설명|기본값|
 |------|---|---|---|
-|--data|str|random seed|"/opt/ml/input/data/train/train_ratings.csv"|
-|--output_dir-dim|str|number of epochs to train|"/workspace/output/"|
-|--output_file_name|str|dataset augmentation type|"submission_lambda500_top50.csv"|
+|--data|str|data path|"/opt/ml/input/data/train/train_ratings.csv"|
+|--output_dir|str|output dir|"/workspace/output/"|
+|--output_file_name|str|output name|"submission_lambda500.csv"|
 |--lambda_|float|data augmentation type|500|
 
 ## 🖼️ 실행 결과
