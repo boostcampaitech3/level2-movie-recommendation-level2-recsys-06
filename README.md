@@ -95,12 +95,10 @@ level1-image-classification-level1-recsys-09
 
 
 ## ⚙️ Training 명령어
-
-```python
-python train.py --model 'Ensemble' --TTA True --name 'final model' --epoch 3
-```
-
 ### RecVAE
+```python
+python run.py --optimizer ‘RAdam’
+```
 |명령어|타입|설명|기본값|
 |------|---|---|---|
 |--dataset|str|random seed||
@@ -116,6 +114,9 @@ python train.py --model 'Ensemble' --TTA True --name 'final model' --epoch 3
 |--not-alternating|bool|data augmentation type|False|
 
 ### EASE
+```python
+python run_ease.py --lambda 700’
+```
 |명령어|타입|설명|기본값|
 |------|---|---|---|
 |--data|str|random seed|"/opt/ml/input/data/train/train_ratings.csv"|
