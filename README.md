@@ -94,7 +94,7 @@ python run_ease.py --lambda 500
 |--data|str|data path|"/opt/ml/input/data/train/train_ratings.csv"|
 |--output_dir|str|output dir|"/workspace/output/"|
 |--output_file_name|str|output name|"submission_lambda500.csv"|
-|--lambda_|float|data augmentation type|500|
+|--lambda_|float|regularization|500|
 
 ## 🖼️ 실행 결과
 
