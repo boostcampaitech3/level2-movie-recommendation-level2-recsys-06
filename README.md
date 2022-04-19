@@ -48,19 +48,20 @@ pip install -r requirements.txt
 
 ## 🔨 Installation
 
-- torch == 1.6.0
-- torchvision == 0.7.0
-- tensorboard == 2.4.1
-- pandas == 1.1.5
-- opencv-python == 4.5.1.48
-- scikit-learn ~= 0.24.1
-- matplotlib == 3.2.1
-- efficientnet_pytorch
+- numpy==1.22.2
+- pandas==1.4.1
+- pytz==2021.3
+- python-dateutil==2.8.2
+- scipy==1.8.0
+- six==1.16.0
+- torch==1.10.2
+- tqdm==4.62.3
+- typing_extensions==4.1.1
+- Python==3.8.5
 
 ```python
-$ pip install -r $ROOT/level1-image-classification-level1-recsys-09/requirements.txt
+$ pip install -r $ROOT/level2-movie-recommendation-level2-recsys-06/requirements.txt
 ```
-
 
 
 ## ✍ Function Description
@@ -99,8 +100,28 @@ level1-image-classification-level1-recsys-09
 python train.py --model 'Ensemble' --TTA True --name 'final model' --epoch 3
 ```
 
-![image](https://user-images.githubusercontent.com/44939208/157379480-737623fe-8237-47bc-8c4a-03897a8fd3e9.png)
+### RecVAE
+|명령어|타입|설명|기본값|
+|------|---|---|---|
+|--dataset|str|random seed||
+|--hidden-dim|int|number of epochs to train|600|
+|--latent-dim|int|dataset augmentation type|300|
+|--batch-size|int|data augmentation type|500|
+|--beta|float|data augmentation type|CustomAugmentation|
+|--gamma|float|data augmentation type|0.005|
+|--lr|float|data augmentation type|5e-4|
+|--n-epochs|int|data augmentation type|50|
+|--n-enc_epochs|int|data augmentation type|3|
+|--n-dec_epochs|int|data augmentation type|1|
+|--not-alternating|bool|data augmentation type|False|
 
+### EASE
+|명령어|타입|설명|기본값|
+|------|---|---|---|
+|--data|str|random seed|"/opt/ml/input/data/train/train_ratings.csv"|
+|--output_dir-dim|str|number of epochs to train|"/workspace/output/"|
+|--output_file_name|str|dataset augmentation type|"submission_lambda500_top50.csv"|
+|--lambda_|float|data augmentation type|500|
 
 ## 🖼️ 실행 결과
 
