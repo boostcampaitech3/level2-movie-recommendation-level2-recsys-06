@@ -125,13 +125,18 @@ python train.py --model 'Ensemble' --TTA True --name 'final model' --epoch 3
 
 ## 🖼️ 실행 결과
 
-| 모델명 | F1-Score | Accuracy | 최종 순위 |
-| --- | --- | --- | --- |
-| EfficientNet-b4 + GoogLeNet | 0.7269 | 77.3016 | private 35등 |
+| 모델명 | Recall@10 | 최종 순위 |
+| --- | --- | --- |
+| RecVAE + EASE 앙상블 | 0.1630 | private 6등 |
 
 
 ## 📜 참고자료
-
-[EfficientNet-PyTorch](https://github.com/lukemelas/EfficientNet-PyTorch)
-
-[GoogLeNet](https://pytorch.org/vision/stable/_modules/torchvision/models/googlenet.html)
+1. Diane Bouchacourt, Ryota Tomioka, Sebastian Nowozin, 2017. Multi-Level Variational Autoencoder: Learning Disentangled Representations from Grouped Observations
+2. Dawen Liang, Rahul G. Krishnan, Matthew D. Hoffman, Tony Jebara, 2018. Variational Autoencoders for Collaborative Filtering
+3. Huifeng Guo, Ruiming Tang, Yunming Ye, Zhenguo Li, Xiuqiang He, 2017. DeepFM: A Factorization-Machine based Neural Network for CTR Prediction
+4. Wang-Cheng Kang, Julian McAuley, 2018. Self-Attentive Sequential Recommendation
+5. Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang, 2019. BERT4Rec: Sequential Recommendation with Bidirectional Encoder Representations from Transformer
+6. Ilya Shenbin, Anton Alekseev, Elena Tutubalina, Valentin Malykh, Sergey I. Nikolenko, 2019. RecVAE: a New Variational Autoencoder for Top-N Recommendations with Implicit Feedback
+7. Harald Steck. 2019. Embarrassingly Shallow Autoencoders for Sparse Data
+8. Daeryong Kim, Bongwon Suh, 2019. Enhancing VAEs for Collaborative Filtering: Flexible Priors & Gating Mechanisms
+9. Pavel Kordik, Vojtech Vancura, 2021. Deep Variational Autoencoder with Shallow Parallel Path for Top-N Recommendation (VASP)
