@@ -101,7 +101,7 @@ level2-movie-recommendation-level2-recsys-06
 ## ⚙️ Training 명령어
 ### RecVAE
 ```python
-python run.py --optimizer ‘RAdam’
+python run.py --optimizer 'RAdam'
 ```
 |명령어|타입|설명|기본값|
 |------|---|---|---|
@@ -119,7 +119,7 @@ python run.py --optimizer ‘RAdam’
 
 ### EASE
 ```python
-python run_ease.py --lambda 700’
+python run_ease.py --lambda 700
 ```
 |명령어|타입|설명|기본값|
 |------|---|---|---|
