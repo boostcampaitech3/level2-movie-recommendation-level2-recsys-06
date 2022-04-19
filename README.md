@@ -78,19 +78,23 @@ $ pip install -r $ROOT/level2-movie-recommendation-level2-recsys-06/requirements
 ## 🏢 Structure
 
 ```bash
-level1-image-classification-level1-recsys-09
-│
-├── README.md
-├── requirements.txt
-├── EDA
-│   ├── data_EDA.ipynb
-│   ├── image_EDA.ipynb
-│   └── torchvision_transforms.ipynb
-└── python
-    ├── dataset.py
-    ├── loss.py
-    ├── model.py
-    └── train.py
+level2-movie-recommendation-level2-recsys-06
+|-- EDA
+|   `-- EDA_hyeji.ipynb
+|-- README.md
+|-- datasets.py
+|-- ensemble.ipynb
+|-- inference.py
+|-- models.py
+|-- modules.py
+|-- preprocessing.py
+|-- requirements.txt
+|-- run_pretrain.py
+|-- run_train.py
+|-- sample_submission.ipynb
+|-- trainers.py
+|-- utils.py
+`-- wandb_guied.md
 ```
 
 
