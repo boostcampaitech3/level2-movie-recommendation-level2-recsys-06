@@ -9,6 +9,37 @@ import pandas as pd
 
 import argparse
 
+def split_train_test_proportion(data, test_prop=0.2):
+    data_grouped_by_user = data.groupby('user')
+    tr_list, te_list = list(), list()
+
+    np.random.seed(98765)
+
+    for i, (_, group) in enumerate(data_grouped_by_user):
+        n_items_u = len(group)
+
+        idx = np.zeros(n_items_u, dtype='bool')
+        idx[np.random.choice(n_items_u, size=int(test_prop * n_items_u), replace=False).astype('int64')] = True
+
+        tr_list.append(group[np.logical_not(idx)])
+        te_list.append(group[idx])
+
+
+        if i % 1000 == 0:
+            print("%d users sampled" % i)
+            sys.stdout.flush()
+
+    data_tr = pd.concat(tr_list)
+    data_te = pd.concat(te_list)
+
+    return data_tr, data_te
+    
+def numerize(tp):
+    uid = list(map(lambda x: profile2id[x], tp['user']))
+    sid = list(map(lambda x: show2id[x], tp['item']))
+    return pd.DataFrame(data={'uid': uid, 'sid': sid}, columns=['uid', 'sid'])
+    
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str)
 parser.add_argument('--output_dir', type=str)
@@ -53,36 +84,6 @@ with open(os.path.join(output_dir, 'unique_uid.txt'), 'w') as f:
     for uid in unique_uid:
         f.write('%s\n' % uid)
 
-
-def split_train_test_proportion(data, test_prop=0.2):
-    data_grouped_by_user = data.groupby('user')
-    tr_list, te_list = list(), list()
-
-    np.random.seed(98765)
-
-    for i, (_, group) in enumerate(data_grouped_by_user):
-        n_items_u = len(group)
-
-        idx = np.zeros(n_items_u, dtype='bool')
-        idx[np.random.choice(n_items_u, size=int(test_prop * n_items_u), replace=False).astype('int64')] = True
-
-        tr_list.append(group[np.logical_not(idx)])
-        te_list.append(group[idx])
-
-
-        if i % 1000 == 0:
-            print("%d users sampled" % i)
-            sys.stdout.flush()
-
-    data_tr = pd.concat(tr_list)
-    data_te = pd.concat(te_list)
-
-    return data_tr, data_te
-    
-def numerize(tp):
-    uid = list(map(lambda x: profile2id[x], tp['user']))
-    sid = list(map(lambda x: show2id[x], tp['item']))
-    return pd.DataFrame(data={'uid': uid, 'sid': sid}, columns=['uid', 'sid'])
 
 
 train_data = numerize(train_plays)
