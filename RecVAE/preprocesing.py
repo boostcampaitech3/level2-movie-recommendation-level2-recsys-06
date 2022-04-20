@@ -38,7 +38,7 @@ def numerize(tp):
     uid = list(map(lambda x: profile2id[x], tp['user']))
     sid = list(map(lambda x: show2id[x], tp['item']))
     return pd.DataFrame(data={'uid': uid, 'sid': sid}, columns=['uid', 'sid'])
-    
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str)
@@ -57,14 +57,9 @@ raw_data = pd.read_csv(dataset, header=0)
 
 unique_uid = raw_data['user'].unique()
 
-# np.random.seed(98765)
-# idx_perm = np.random.permutation(unique_uid.size)
-# unique_uid = unique_uid[idx_perm]
-
 n_users = unique_uid.size
 
 tr_users = unique_uid[:(n_users - n_heldout_users)]
-# te_users = unique_uid[(n_users - n_heldout_users):]
 
 train_plays = raw_data.loc[raw_data['user'].isin(tr_users)]
 
