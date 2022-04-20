@@ -188,17 +188,6 @@ for epoch in range(args.n_epochs):
 
     print(f'epoch {epoch} | train recall@10: {train_scores[-1]:.4f}')
 
-
-
-# test_metrics =  [{'metric': recall, 'k': 10}]
-
-# final_scores = evaluate(model_best, test_in_data, test_out_data, test_metrics)
-
-# for metric, score in zip(test_metrics, final_scores):
-#     print(f"{metric['metric'].__name__}@{metric['k']}:\t{score:.4f}")
-
-# torch.save(model_best.state_dict(), './RecVAE epochs 60 beta 0.4 latent-dim 250.pth')
-
 def result(model, data_in, samples_perc_per_epoch=1, batch_size=500):
     model.eval()
     items=[]

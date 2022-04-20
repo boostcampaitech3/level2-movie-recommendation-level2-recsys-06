@@ -78,13 +78,7 @@ def split_train_test_proportion(data, test_prop=0.2):
     data_te = pd.concat(te_list)
 
     return data_tr, data_te
-
-
-# test_plays = raw_data.loc[raw_data['user'].isin(te_users)]
-# test_plays = test_plays.loc[test_plays['item'].isin(unique_sid)]
-
-# test_plays_tr, test_plays_te = split_train_test_proportion(test_plays)
-
+    
 def numerize(tp):
     uid = list(map(lambda x: profile2id[x], tp['user']))
     sid = list(map(lambda x: show2id[x], tp['item']))
@@ -93,9 +87,3 @@ def numerize(tp):
 
 train_data = numerize(train_plays)
 train_data.to_csv(os.path.join(output_dir, 'train.csv'), index=False)
-
-# test_data_tr = numerize(test_plays_tr)
-# test_data_tr.to_csv(os.path.join(output_dir, 'test_tr.csv'), index=False)
-
-# test_data_te = numerize(test_plays_te)
-# test_data_te.to_csv(os.path.join(output_dir, 'test_te.csv'), index=False) 
