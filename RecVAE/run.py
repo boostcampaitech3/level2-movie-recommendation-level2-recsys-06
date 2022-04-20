@@ -13,6 +13,7 @@ import pandas as pd
 import bottleneck as bn
 
 import wandb
+
 wandb.init(
         project="MovieLens", 
         entity="recsys-06",  
@@ -21,7 +22,7 @@ wandb.init(
         group="RecVAE"
 )
 
-import argparse
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str)
 parser.add_argument('--hidden-dim', type=int, default=600)
@@ -44,7 +45,6 @@ torch.manual_seed(seed)
 device = torch.device("cuda:0")
 
 data = get_data(args.dataset)
-# train_data, test_in_data, test_out_data = data
 train_data, = data # 데이터 전체로 학습 후 결과하기 위해
 
 
