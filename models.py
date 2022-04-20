@@ -138,15 +138,12 @@ class EASE2:
             # 본 영화를 item 중에 제거한 index list.
             candidates = [item for item in items if item not in watched]
             last_interaction = self.user_last_interaction_dict[user]
-            # last_interaction = \
-            # self.user_last_interaction[self.user_last_interaction['user'] == user]['last_interaction'].iloc[0]
             will_be_removed = []
 
             original_cand = self.item_enc.inverse_transform(candidates)
 
             for index, movie_number in enumerate(original_cand):
                 movie_year = self.item_year_dict[movie_number]
-                # movie_year = self.item_year_df[self.item_year_df['item'] == movie_number]['item_year'].iloc[0]
                 if int(movie_year) > last_interaction:
                     will_be_removed.append(index)
 
@@ -165,3 +162,9 @@ class EASE2:
         df['item'] = self.item_enc.inverse_transform(df['item'])
         print("finish predict")
         return df
+
+    def make_all_predicted(self):
+        all_ = pd.DataFrame(self.pred)
+        all_.to_csv(
+            "/workspace/output/all_result.csv", index=False
+        )
