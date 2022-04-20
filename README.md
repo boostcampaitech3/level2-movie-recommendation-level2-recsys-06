@@ -24,6 +24,12 @@ python run_ease.py \
 ----output_file_name "output_file_name" --labmda_ "lambda"
 ```
 
+2. make all predicted item per user (OPTION)\
+```--all_predict True```
+   
+3. if you want to use YEAR column (OPTION)\
+```--use_year True```
+
 ## Input & output
 ### Input
 ```csv file``` with columns ```user_id``` and ```item_id``` both for fit and predict.
