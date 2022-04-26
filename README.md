@@ -82,3 +82,5 @@ level2-movie-recommendation-level2-recsys-06
 7. Harald Steck. 2019. Embarrassingly Shallow Autoencoders for Sparse Data
 8. Daeryong Kim, Bongwon Suh, 2019. Enhancing VAEs for Collaborative Filtering: Flexible Priors & Gating Mechanisms
 9. Pavel Kordik, Vojtech Vancura, 2021. Deep Variational Autoencoder with Shallow Parallel Path for Top-N Recommendation (VASP)
+
+ 
