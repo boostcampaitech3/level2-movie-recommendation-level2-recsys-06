@@ -11,6 +11,7 @@ from model import VAE
 
 import pandas as pd
 import bottleneck as bn
+from importlib import import_module
 
 import wandb
 
@@ -156,6 +157,7 @@ parser.add_argument('--n-epochs', type=int, default=50)
 parser.add_argument('--n-enc_epochs', type=int, default=3)
 parser.add_argument('--n-dec_epochs', type=int, default=1)
 parser.add_argument('--not-alternating', type=bool, default=False)
+parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer type (default: Adam)') # optimizer 설정
 args = parser.parse_args()
 
 seed = 1337
@@ -193,8 +195,19 @@ learning_kwargs = {
 decoder_params = set(model.decoder.parameters())
 encoder_params = set(model.encoder.parameters())
 
-optimizer_encoder = optim.Adam(encoder_params, lr=args.lr)
-optimizer_decoder = optim.Adam(decoder_params, lr=args.lr)
+opt_encoder_module = getattr(import_module("torch.optim"), args.optimizer)  # default: Adam
+opt_decoder_module = getattr(import_module("torch.optim"), args.optimizer)  # default: Adam
+optimizer_encoder = opt_encoder_module(
+        encoder_params,
+        lr=args.lr,
+        weight_decay=args.wd
+    )
+
+optimizer_decoder = opt_decoder_module(
+        decoder_params,
+        lr=args.lr,
+        weight_decay=args.wd
+    )
 
 
 for epoch in range(args.n_epochs):
