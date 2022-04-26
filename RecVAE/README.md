@@ -27,7 +27,7 @@ python preprocessing.py 을 실행한 후 python run.py 로 실행하면 됩니�
 |--n-dec_epochs|int|decoding 부분 dropout|1|
 |--not-alternating|bool|--n-enc_epochs/--n-dec_epochs 사용여부|False|
 
-## final model
+## 🖼️ final model
 ```python
 python run.py --optimizer 'RAdam'
 ```

@@ -17,7 +17,7 @@ referred github : https://github.com/Darel13712/ease_rec
 pip install -r requirements.txt
 ```
 
-## run
+## 🏃 run
 1. Run and make csv file
 ```
 python run_ease.py \
@@ -39,17 +39,17 @@ python run_ease.py \
 |--lambda_|float|regularization|500|
 
 
-## Input & output
-### Input
+## 🍽 Input & output
+### 🍴 Input
 ```csv file``` with columns ```user_id``` and ```item_id``` both for fit and predict.
 
 It may also use ```ratings``` from column rating if ```implicit``` parameter is set to ```False```.
 
-### Output
+### 🥄 Output
 ```csv file``` with columns user_id, item_id
 
 
-## final model
+## 🖼️ final model
 ```python
 python run_ease.py --lambda 500
 ```
