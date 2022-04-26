@@ -47,22 +47,23 @@ $ pip install -r $ROOT/level2-movie-recommendation-level2-recsys-06/requirements
 
 ```bash
 level2-movie-recommendation-level2-recsys-06
+|-- EASE
+|   |-- README.md
+|   |-- models.py
+|   |-- requirements.txt
+|   `-- run_ease.py
 |-- EDA
 |   `-- EDA_hyeji.ipynb
+|-- Ensemble
+|   `-- ensemble.ipynb
 |-- README.md
-|-- datasets.py
-|-- ensemble.ipynb
-|-- inference.py
-|-- models.py
-|-- modules.py
-|-- preprocessing.py
-|-- requirements.txt
-|-- run_pretrain.py
-|-- run_train.py
-|-- sample_submission.ipynb
-|-- trainers.py
-|-- utils.py
-`-- wandb_guied.md
+|-- RecVAE
+|   |-- README.md
+|   |-- model.py
+|   |-- preprocesing.py
+|   |-- run.py
+|   `-- utils.py
+`-- requirements.txt
 ```
 
 ## 🖼️ 실행 결과
