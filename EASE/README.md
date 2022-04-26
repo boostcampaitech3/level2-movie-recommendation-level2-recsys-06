@@ -12,11 +12,6 @@ paperwithcode : https://paperswithcode.com/paper/190503375
 
 referred github : https://github.com/Darel13712/ease_rec
 
-## Installation
-```
-pip install -r requirements.txt
-```
-
 ## 🏃 run
 1. Run and make csv file
 ```
