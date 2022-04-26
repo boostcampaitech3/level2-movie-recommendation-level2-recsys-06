@@ -1,7 +1,9 @@
-python preprocessing.py 을 실행한 후
-python run.py 로 실행하면 됩니다.
+# Movie Recommendation RecVAE Model Code
 
-preprocessing의 argparser
+## 🏃 run
+python preprocessing.py 을 실행한 후 python run.py 로 실행하면 됩니다.
+
+- preprocessing의 argparser
 
 |명령어|타입|설명|기본값|
 |------|---|---|---|
@@ -9,7 +11,7 @@ preprocessing의 argparser
 |--output_dir|str|preprocessing된 데이터의 저장 위치||
 |--heldout_users|int|전체 데이터 사용은 0||
 
-run의 argparser
+- run의 argparser
 
 |명령어|타입|설명|기본값|
 |------|---|---|---|
@@ -24,3 +26,8 @@ run의 argparser
 |--n-enc_epochs|int|encoding 부분 dropout|3|
 |--n-dec_epochs|int|decoding 부분 dropout|1|
 |--not-alternating|bool|--n-enc_epochs/--n-dec_epochs 사용여부|False|
+
+## final model
+```python
+python run.py --optimizer 'RAdam'
+```
