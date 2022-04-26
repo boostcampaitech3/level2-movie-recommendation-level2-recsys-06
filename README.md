@@ -85,17 +85,6 @@ python run.py --optimizer 'RAdam'
 |--n-dec_epochs|int|decoding 부분 dropout|1|
 |--not-alternating|bool|--n-enc_epochs/--n-dec_epochs 사용여부|False|
 
-### EASE
-```python
-python run_ease.py --lambda 500
-```
-|명령어|타입|설명|기본값|
-|------|---|---|---|
-|--data|str|data path|"/opt/ml/input/data/train/train_ratings.csv"|
-|--output_dir|str|output dir|"/workspace/output/"|
-|--output_file_name|str|output name|"submission_lambda500.csv"|
-|--lambda_|float|regularization|500|
-
 ## 🖼️ 실행 결과
 
 | 모델명 | Recall@10 | 최종 순위 |

@@ -1,4 +1,5 @@
 # Movie Recommendation EASE Model Code
+
 Embarrassingly Shallow Autoencoders for Sparse Data
 
 This model is cool because it is a closed-form solution.
@@ -30,6 +31,14 @@ python run_ease.py \
 3. if you want to use YEAR column (OPTION)\
 ```--use_year True```
 
+|명령어|타입|설명|기본값|
+|------|---|---|---|
+|--data|str|data path|"/opt/ml/input/data/train/train_ratings.csv"|
+|--output_dir|str|output dir|"/workspace/output/"|
+|--output_file_name|str|output name|"submission_lambda500.csv"|
+|--lambda_|float|regularization|500|
+
+
 ## Input & output
 ### Input
 ```csv file``` with columns ```user_id``` and ```item_id``` both for fit and predict.
@@ -38,3 +47,9 @@ It may also use ```ratings``` from column rating if ```implicit``` parameter is 
 
 ### Output
 ```csv file``` with columns user_id, item_id
+
+
+## final model
+```python
+python run_ease.py --lambda 500
+```
