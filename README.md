@@ -49,8 +49,7 @@ $ pip install -r $ROOT/level2-movie-recommendation-level2-recsys-06/requirements
 level2-movie-recommendation-level2-recsys-06
 |-- EASE
 |   |-- README.md
-|   |-- models.py
-|   |-- requirements.txt
+|   |-- models.py|   
 |   `-- run_ease.py
 |-- EDA
 |   `-- EDA_hyeji.ipynb
